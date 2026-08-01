@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>방문일지</title>
+<meta name="theme-color" content="#0f6a5f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="방문일지">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<!--
+  방문일지 (Visit Log) v11
+  =========================
+  v10 → v11 개선 사항:
+  1. 검색 범위 선택 추가: 검색창 왼쪽의 범위 선택(전체/담당자명/주소/
+     상호/변경상호/특이사항)으로 검색 대상 항목을 제한 가능.
+     - '전체'는 기존처럼 카드 전체를 그룹으로 검색.
+     - '담당자명'으로 검색하면 방문담당자명 항목에만 해당 단어가 있는
+       카드만 나열되어, 특이사항에 이름이 적힌 다른 담당자의 카드가
+       섞여 나오는 혼란을 막을 수 있음.
+     - 범위를 좁혀 검색하면 결과 상단에 [범위: 항목명]이 표시됨.
+  2. 특이사항 글자수 제한 50자 → 100자로 확대.
+
+  v9 → v10 개선 사항:
+  1. 입력 항목 순서 변경: 방문담당자명을 맨 위(방문주소 위)로,
+     특이사항은 맨 아래로. (저장 키 이름은 그대로라 기존 데이터와
+     100% 호환됩니다)
+  2. 검색 결과에 '일치 항목' 태그 표시: 카드 그룹 단위 검색이라
+     주소/상호/특이사항 등 어떤 항목이 일치해도 카드가 나오는데,
+     어느 항목이 일치했는지 안 보여서 "이름이 바뀐 것처럼" 보일 수
+     있던 문제 → 각 결과 카드에 일치한 항목을 명확히 표시.
+     결과 카드 머리에도 담당자 이름을 바로 보이게 추가.
+  3. 브라우저 자동완성(autofill) 오염 방지: 모바일 브라우저가 한 카드에
+     입력한 담당자 이름을 다른 카드의 담당자란에도 자동으로 채워
+     저장해버리는 사례 방지 (autocomplete/data-lpignore 속성 강화).
+
+  v8 → v9 개선 사항:
+  1. 빠른 검색 기능 추가: 상단 검색창 + 검색 버튼(또는 Enter)으로
+     모든 날짜의 기록에서 단어가 포함된 카드를 찾아 아래에 전체 나열.
+     - 카드 1장을 하나의 그룹으로 검색 (주소/상호/변경상호/특이사항/
+       담당자/시각 중 하나라도 단어가 포함되면 해당 카드가 결과에 표시)
+     - 결과에 검색 단어를 노랗게 하이라이트
+     - 결과 카드를 누르면 해당 날짜 기록으로 바로 이동
+     - '닫기' 버튼으로 검색 결과를 닫고 원래 화면으로 복귀
+
+  v7 → v8 개선 사항:
+  1. (치명적 버그) 저장소가 window.storage(특수 환경 전용)에만 의존해서
+     일반 브라우저에서 열면 저장이 전혀 되지 않던 문제 수정
+     → window.storage 가 없으면 localStorage 를 쓰는 어댑터 추가.
+     이제 크롬/사파리/삼성 인터넷 등 어떤 브라우저에서도 데이터가 유지됨.
+  2. 방문주소 글자수 제한 50자 → 80자로 확대.
+  3. 상단에 작성 진행 칩 "작성 n/4" 추가.
+  4. 5분 자동 백업 방식 변경: 브라우저에서 5분마다 파일 다운로드를
+     강제로 띄우던(브라우저가 차단하거나 다운로드 폴더가 지저분해지던)
+     방식 → 기기 내부 저장소에 조용히 백업하는 방식으로 교체.
+  5. '저장' 파일명에 날짜+시각(시분) 포함 → 누를 때마다 새 파일,
+     실수로 눌러도 이전 파일을 덮어쓰지 않음.
+  6. 불러오기: .txt 리포트뿐 아니라 .json 저장 파일도 지원.
+  7. 손상된 저장 데이터(배열 길이 부족, 타입 오류 등)를 만나도
+     앱이 죽지 않고 안전하게 보정해서 표시.
+  8. 화면 이탈(다른 앱 전환/탭 닫기) 시 즉시 저장 — 입력 직후
+     나가도 마지막 글자까지 유실되지 않음.
+  9. 지난 기록 목록에서 백업/설정 키와 깨진 날짜 키 제외.
+  10. 공유/다운로드 폴백의 objectURL 해제 타이밍 수정
+      (즉시 해제하면 일부 브라우저에서 다운로드가 취소될 수 있음).
+  11. 모바일 키보드 편의: 입력란 enterkeyhint="next" 적용,
+      폰트에 맑은고딕 폴백 추가.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #E9EDE7;
+    --paper-2: #DFE5DE;
+    --ink: #232F3B;
+    --ink-soft: #56635F;
+    --teal: #2F6F62;
+    --teal-dark: #204E44;
+    --teal-pale: #DCE8E2;
+    --brick: #A63D40;
+    --line: #C7CFC5;
+    --card: #F5F7F3;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+    min-height:100vh;
+    padding-bottom:96px;
+  }
+  .bg-texture{
+    position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
+    background-image: repeating-linear-gradient(180deg, transparent, transparent 27px, var(--line) 28px);
+  }
+  header{
+    position:relative; z-index:1;
+    padding:22px 18px 14px;
+    border-bottom:2px solid var(--ink);
+  }
+  .eyebrow-row{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    margin-bottom:4px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px; letter-spacing:.14em; color:var(--teal-dark);
+    text-transform:uppercase;
+  }
+  .ver-tag{
+    display:inline-block; margin-left:4px; padding:1px 6px;
+    border:1px solid var(--teal-dark); border-radius:8px;
+    font-size:10px; letter-spacing:.05em;
+  }
+  .progress-chip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px; font-weight:600; color:var(--teal-dark);
+    border:1.3px solid var(--teal-dark); background:var(--teal-pale);
+    padding:2px 8px; white-space:nowrap;
+  }
+  h1{
+    font-family:'Noto Serif KR','Malgun Gothic',serif;
+    font-weight:700; font-size:26px; margin:0 0 12px;
+    letter-spacing:-.01em;
+  }
+  .date-nav{
+    display:flex; align-items:center; gap:10px;
+  }
+  .date-nav button{
+    width:36px;height:36px; border-radius:0; border:1.5px solid var(--ink);
+    background:var(--card); color:var(--ink); font-size:16px; font-family:'IBM Plex Mono',monospace;
+    cursor:pointer; flex-shrink:0;
+  }
+  .date-nav button:active{ background:var(--ink); color:var(--card); }
+  .date-display{
+    flex:1; min-width:0;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:15px; font-weight:600;
+    border:1.5px solid var(--ink); background:var(--card);
+    padding:8px 10px; text-align:center;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .date-display input[type=date]{
+    border:none; background:transparent; font-family:'IBM Plex Mono',monospace;
+    font-size:14px; font-weight:600; color:var(--ink); width:100%; min-width:0;
+  }
+  .weekday{ color:var(--teal-dark); flex-shrink:0; }
+
+  main{ position:relative; z-index:1; padding:16px; }
+
+  .search-bar{
+    display:flex; gap:8px; margin-bottom:16px;
+  }
+  .search-bar input{
+    flex:1; min-width:0; border:1.5px solid var(--ink); background:#fff;
+    padding:10px 12px; font-size:14px;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
+  }
+  .search-bar input:focus{ outline:none; border-color:var(--teal); }
+  .search-bar button{
+    padding:10px 16px; font-size:13.5px; font-weight:700; cursor:pointer;
+    border:1.5px solid var(--teal-dark); background:var(--teal-dark); color:#fff;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; white-space:nowrap;
+    flex-shrink:0;
+  }
+  .search-bar select{
+    flex-shrink:0; border:1.5px solid var(--ink); background:#fff;
+    padding:10px 4px; font-size:13px;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
+  }
+  .search-bar button:active{ background:var(--ink); border-color:var(--ink); }
+  .search-bar .search-clear{
+    background:var(--card); color:var(--ink); border-color:var(--ink);
+  }
+  .search-view{ display:none; }
+  .search-view.show{ display:block; }
+  .search-meta{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
+    margin:-4px 0 14px; padding:0 4px;
+  }
+  .result-card{ cursor:pointer; }
+  .result-card:active{ border-color:var(--teal); }
+  .result-card .card-head{ flex-wrap:wrap; row-gap:6px; }
+  .result-date{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:12.5px;
+    color:var(--teal-dark);
+  }
+  .result-head-main{ flex:1; min-width:0; }
+  .result-visitor{
+    font-size:14.5px; font-weight:700; color:var(--ink);
+    margin-top:2px; word-break:break-all;
+  }
+  .result-match{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px;
+    color:var(--teal-dark); border:1px solid var(--teal-dark);
+    background:var(--teal-pale); padding:2px 7px; white-space:nowrap;
+  }
+  .result-body{ padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+  .result-row{ display:flex; gap:8px; font-size:13.5px; align-items:baseline; }
+  .result-row .rk{
+    flex-shrink:0; width:82px; color:var(--ink-soft);
+    font-size:12.5px; font-weight:500;
+  }
+  .result-row .rv{ flex:1; min-width:0; word-break:break-all; }
+  mark{ background:#F2E3A0; color:inherit; padding:0 1px; }
+
+  .toolbar{
+    display:flex; gap:8px; margin-bottom:16px;
+  }
+  .toolbar button{
+    flex:1; padding:9px 6px; font-size:12.5px; font-weight:500;
+    border:1.5px solid var(--ink); background:var(--card); color:var(--ink);
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; cursor:pointer;
+  }
+  .toolbar button.active{ background:var(--ink); color:var(--paper); }
+
+  .card{
+    background:var(--card);
+    border:1.5px solid var(--ink);
+    margin-bottom:16px;
+    position:relative;
+    box-shadow: 3px 3px 0 var(--line);
+  }
+  .card-head{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px;
+    border-bottom:1.5px dashed var(--line);
+    background:var(--paper-2);
+  }
+  .stub-num{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600; font-size:14px;
+    width:26px;height:26px;
+    border:1.5px solid var(--teal-dark);
+    color:var(--teal-dark);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .stub-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px; letter-spacing:.1em; color:var(--ink-soft); text-transform:uppercase;
+  }
+  .time-area{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .time-value{
+    font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600;
+    color:var(--teal-dark); min-width:56px; text-align:right;
+  }
+  .time-value.empty{ color:var(--line); font-weight:500; }
+  .time-btn{
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-size:11.5px; font-weight:700;
+    border:1.5px solid var(--teal-dark); background:#fff; color:var(--teal-dark);
+    padding:6px 10px; cursor:pointer; white-space:nowrap;
+  }
+  .time-btn:active{ background:var(--teal-dark); color:#fff; }
+  .card-body{ padding:14px; display:flex; flex-direction:column; gap:12px; }
+  .field label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:12.5px; font-weight:500; color:var(--ink-soft); margin-bottom:5px;
+  }
+  .field label .cnt{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft);
+  }
+  .field label .cnt.warn{ color:var(--brick); }
+  .field input, .field textarea{
+    width:100%; border:1.3px solid var(--line); background:#fff;
+    padding:9px 10px; font-size:14.5px; font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+    color:var(--ink); resize:none;
+  }
+  .field textarea{ min-height:52px; line-height:1.4; }
+  .field input:focus, .field textarea:focus{ outline:none; border-color:var(--teal); }
+  .field.flag input, .field.flag textarea{ border-color:#DCC9A8; background:#FBF6EC; }
+
+  .save-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 4px; margin:-4px 0 14px;
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
+  }
+  .save-row .dot{ width:6px;height:6px;border-radius:50%; background:var(--teal); display:inline-block; margin-right:6px; }
+  .backup-row{ margin:0 0 14px; padding:8px 4px 0; border-top:1px dashed var(--line); }
+  .switch-label{ display:flex; align-items:center; gap:7px; cursor:pointer; color:var(--ink-soft); }
+  .switch-label input[type=checkbox]{ width:14px;height:14px; accent-color:var(--teal-dark); cursor:pointer; }
+
+  .actionbar{
+    position:fixed; bottom:0; left:0; right:0; z-index:5;
+    display:flex; gap:8px;
+    padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+    background:var(--paper); border-top:2px solid var(--ink);
+  }
+  .actionbar button{
+    flex:1; padding:13px; font-size:14px; font-weight:700;
+    border:1.5px solid var(--ink); cursor:pointer;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+  }
+  .btn-share{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
+  .btn-copy{ background:var(--card); color:var(--ink); }
+
+  .history{ display:none; }
+  .history.show{ display:block; }
+  .hist-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 14px; background:var(--card); border:1.3px solid var(--line);
+    margin-bottom:8px; cursor:pointer;
+  }
+  .hist-item:active{ border-color:var(--ink); }
+  .hist-date{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13.5px; }
+  .hist-meta{ font-size:12px; color:var(--ink-soft); }
+  .hist-count{
+    font-family:'IBM Plex Mono',monospace; font-size:11px;
+    border:1px solid var(--teal-dark); color:var(--teal-dark);
+    padding:2px 7px;
+  }
+  .empty{
+    text-align:center; padding:40px 20px; color:var(--ink-soft); font-size:13.5px;
+  }
+  .day-view{ display:block; }
+  .day-view.hide{ display:none; }
+
+  .toast{
+    position:fixed; left:50%; bottom:96px; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:var(--paper); padding:10px 18px;
+    font-size:13px; font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+    opacity:0; transition:all .25s ease; z-index:20; white-space:nowrap;
+    max-width:92vw; overflow:hidden; text-overflow:ellipsis;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="bg-texture"></div>
+
+<header>
+  <div class="eyebrow-row">
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v11</span></div>
+    <span class="progress-chip" id="progressChip">작성 0/4</span>
+  </div>
+  <h1>오늘의 방문 기록</h1>
+  <div class="date-nav">
+    <button id="prevDay" type="button">‹</button>
+    <div class="date-display">
+      <span class="weekday" id="weekdayLabel">월</span>
+      <input type="date" id="dateInput">
+    </div>
+    <button id="nextDay" type="button">›</button>
+  </div>
+</header>
+
+<main>
+  <div class="search-bar">
+    <select id="searchScope" aria-label="검색 범위">
+      <option value="all">전체</option>
+      <option value="visitor">담당자명</option>
+      <option value="addr">주소</option>
+      <option value="name">상호</option>
+      <option value="changed">변경상호</option>
+      <option value="note">특이사항</option>
+    </select>
+    <input type="text" id="searchInput" placeholder="빠른 검색 (주소·상호·담당자 등)"
+           enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button id="searchBtn" type="button">검색</button>
+    <button id="searchClear" class="search-clear" type="button" style="display:none">닫기</button>
+  </div>
+
+  <div class="toolbar">
+    <button id="tabDay" class="active" type="button">오늘 기록</button>
+    <button id="tabHistory" type="button">지난 기록</button>
+  </div>
+
+  <div id="searchView" class="search-view">
+    <div class="search-meta" id="searchMeta"></div>
+    <div id="searchResults"></div>
+  </div>
+
+  <div id="dayView" class="day-view">
+    <div class="save-row"><span><span class="dot"></span>자동 저장됨</span><span id="lastSaved">—</span></div>
+    <div class="save-row backup-row">
+      <label class="switch-label">
+        <input type="checkbox" id="autoBackupToggle" checked>
+        <span>5분마다 자동 임시저장 (기기 내부)</span>
+      </label>
+      <span id="lastBackup">—</span>
+    </div>
+    <div id="cardsWrap"></div>
+  </div>
+
+  <div id="historyView" class="history">
+    <div id="historyList"></div>
+  </div>
+</main>
+
+<div class="actionbar" id="actionbar">
+  <button class="btn-copy" id="importBtn" type="button">불러오기</button>
+  <button class="btn-copy" id="copyBtn" type="button">복사</button>
+  <button class="btn-share" id="shareBtn" type="button">저장</button>
+</div>
+<input type="file" id="importFile" accept=".txt,.json,text/plain,application/json" style="display:none">
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ===================================================================
+// 저장소 어댑터 (v8 핵심 수정)
+// window.storage(특수 환경 전용 API)가 있으면 그것을 쓰고,
+// 없으면(일반 브라우저) localStorage 를 쓴다.
+// 이전 버전은 일반 브라우저에서 저장이 전혀 되지 않았다.
+// ===================================================================
+const storage = (() => {
+  if (window.storage && typeof window.storage.get === 'function') {
+    return window.storage;
+  }
+  return {
+    async get(key){
+      const v = localStorage.getItem(key);
+      return v === null ? null : { key, value: v };
+    },
+    async set(key, value){
+      localStorage.setItem(key, value);
+      return { key, value };
+    },
+    async delete(key){
+      localStorage.removeItem(key);
+      return { key, deleted: true };
+    },
+    async list(prefix){
+      const keys = [];
+      prefix = prefix || '';
+      for (let i = 0; i < localStorage.length; i++){
+        const k = localStorage.key(i);
+        if (k && k.indexOf(prefix) === 0) keys.push(k);
+      }
+      return { keys };
+    }
+  };
+})();
+
+const LIMITS = { addr:80, name:20, changed:20, note:100, visitor:20 };
+const FIELD_META = [
+  {key:'visitor', label:'방문담당자명', type:'input',    max:LIMITS.visitor},
+  {key:'addr',    label:'방문주소',     type:'input',    max:LIMITS.addr},
+  {key:'name',    label:'방문상호',     type:'input',    max:LIMITS.name},
+  {key:'changed', label:'변경 상호',    type:'input',    max:LIMITS.changed},
+  {key:'note',    label:'특이사항',     type:'textarea', max:LIMITS.note},
+];
+const FIELD_LABEL = {
+  addr:'방문주소', name:'방문상호', changed:'변경 상호',
+  note:'특이사항', visitor:'방문담당자명', time:'방문시각',
+};
+const SETTINGS_KEY = 'visit-log:settings';
+const BACKUP_KEY   = 'visit-log:backup';
+const DATE_KEY_RE  = /^\d{4}-\d{2}-\d{2}$/;
+const SAVE_DEBOUNCE_MS = 600;          // 입력 후 0.6초 뒤 자동 저장
+const BACKUP_INTERVAL_MS = 5 * 60 * 1000; // 5분마다 자동 임시저장
+const BACKUP_SAFETY_GAP_MS = 10000;    // 여러 트리거가 겹칠 때 최소 간격
+
+let currentDate = todayStr();
+let currentVisits = emptyVisits();
+let saveTimer = null;
+let backupIntervalId = null;
+let lastBackupAt = 0;
+let autoBackupEnabled = true;
+
+function $(id){ return document.getElementById(id); }
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function nowHHMM(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+}
+function nowHHMMSS(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+}
+function emptyVisits(){
+  return [0,1,2,3].map(()=>({addr:'',name:'',changed:'',note:'',time:'',visitor:''}));
+}
+const _weekdayCache = {};
+function weekdayKR(dateStr){
+  if(_weekdayCache[dateStr]) return _weekdayCache[dateStr];
+  const days=['일','월','화','수','목','금','토'];
+  const d = new Date(dateStr+'T00:00:00');
+  const r = days[d.getDay()]+'요일';
+  _weekdayCache[dateStr] = r;
+  return r;
+}
+function keyFor(dateStr){ return 'visit-log:'+dateStr; }
+
+function hasAnyData(visits){
+  return visits.some(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor);
+}
+
+// 손상된 저장 데이터를 안전하게 보정 (앱이 죽지 않도록)
+function normalizeVisits(parsed){
+  let raw = null;
+  if (Array.isArray(parsed)) raw = parsed;
+  else if (parsed && Array.isArray(parsed.visits)) raw = parsed.visits;
+  if (!raw) return emptyVisits();
+  const fixed = emptyVisits();
+  for (let i = 0; i < Math.min(4, raw.length); i++){
+    const src = raw[i];
+    if (!src || typeof src !== 'object') continue;
+    FIELD_META.forEach(m => {
+      if (typeof src[m.key] === 'string') fixed[i][m.key] = src[m.key].slice(0, m.max);
+    });
+    if (typeof src.time === 'string') fixed[i].time = src.time;
+  }
+  return fixed;
+}
+
+async function loadSettings(){
+  try{
+    const res = await storage.get(SETTINGS_KEY);
+    const s = res && res.value ? JSON.parse(res.value) : {};
+    autoBackupEnabled = s.autoBackup !== false;
+  }catch(e){
+    autoBackupEnabled = true;
+  }
+  $('autoBackupToggle').checked = autoBackupEnabled;
+}
+async function saveSettings(){
+  try{
+    await storage.set(SETTINGS_KEY, JSON.stringify({ autoBackup: autoBackupEnabled }));
+  }catch(e){}
+}
+
+let toastTimer = null;
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+async function loadDate(dateStr){
+  currentDate = dateStr;
+  $('dateInput').value = dateStr;
+  $('weekdayLabel').textContent = weekdayKR(dateStr);
+  try{
+    const res = await storage.get(keyFor(dateStr));
+    const parsed = res && res.value ? JSON.parse(res.value) : null;
+    currentVisits = normalizeVisits(parsed);
+  }catch(e){
+    currentVisits = emptyVisits();
+  }
+  renderCards();
+  const filled = countFilled(currentVisits);
+  $('lastSaved').textContent = filled > 0 ? '기록 '+filled+'곳 있음' : '—';
+}
+
+function countFilled(visits){
+  return visits.filter(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor).length;
+}
+
+function updateProgress(){
+  $('progressChip').textContent = '작성 ' + countFilled(currentVisits) + '/4';
+}
+
+function renderCards(){
+  const wrap = $('cardsWrap');
+  wrap.innerHTML = '';
+  currentVisits.forEach((visit, idx) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-head">
+        <div class="stub-num">${idx+1}</div>
+        <div class="stub-label">방문 ${idx+1} / 4</div>
+        <div class="time-area">
+          <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${visit.time || '미기록'}</span>
+          <button type="button" class="time-btn" data-time-btn>재기록</button>
+        </div>
+      </div>
+      <div class="card-body"></div>
+    `;
+    const timeBtn = card.querySelector('[data-time-btn]');
+    const timeDisplay = card.querySelector('[data-time-display]');
+    const stampTime = ()=>{
+      const stamped = nowHHMMSS();
+      currentVisits[idx].time = stamped;
+      timeDisplay.textContent = stamped;
+      timeDisplay.classList.remove('empty');
+      return stamped;
+    };
+    timeBtn.addEventListener('click', ()=>{
+      const stamped = stampTime();
+      updateProgress();
+      scheduleSave();
+      showToast('방문 '+(idx+1)+' 시각 기록: '+stamped);
+    });
+    const body = card.querySelector('.card-body');
+    FIELD_META.forEach(meta => {
+      const field = document.createElement('div');
+      field.className = 'field' + (meta.key==='note' ? ' flag' : '');
+      const val = visit[meta.key] || '';
+      const fieldId = 'f-'+idx+'-'+meta.key;
+      // autocomplete="new-password" + lpignore: 모바일 브라우저가 한 카드의
+      // 담당자명을 다른 카드에도 자동으로 채워 저장하는 것(autofill 오염) 방지
+      const common = 'data-field="'+meta.key+'" id="'+fieldId+'" name="'+fieldId
+        +'" maxlength="'+meta.max+'" autocomplete="new-password"'
+        +' data-lpignore="true" data-1p-ignore="true" data-form-type="other"'
+        +' autocorrect="off" spellcheck="false"'
+        +' placeholder="'+meta.label+' 입력"';
+      if(meta.type === 'textarea'){
+        field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
+          + '<textarea '+common+'></textarea>';
+      } else {
+        field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
+          + '<input '+common+' type="text" enterkeyhint="next">';
+      }
+      const inputEl = field.querySelector('[data-field]');
+      inputEl.value = val;
+      inputEl.addEventListener('input', (e)=>{
+        currentVisits[idx][meta.key] = e.target.value;
+        const cnt = field.querySelector('[data-cnt]');
+        cnt.textContent = e.target.value.length+'/'+meta.max;
+        cnt.classList.toggle('warn', e.target.value.length >= meta.max);
+        // 이 방문칸에 처음 뭔가 입력하는 순간 자동으로 시각 기록
+        if(!currentVisits[idx].time && e.target.value.trim()){
+          stampTime();
+        }
+        updateProgress();
+        scheduleSave();
+      });
+      body.appendChild(field);
+    });
+    wrap.appendChild(card);
+  });
+  updateProgress();
+}
+
+// ---------------- 자동 저장 (0.6초 디바운스) ----------------
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    saveTimer = null;
+    saveCurrent();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+async function saveCurrent(){
+  try{
+    await storage.set(keyFor(currentDate), JSON.stringify(currentVisits));
+    $('lastSaved').textContent = '저장됨 ' + nowHHMMSS().slice(0,5);
+  }catch(e){
+    $('lastSaved').textContent = '저장 실패';
+  }
+}
+
+async function flushSave(){
+  if(saveTimer){
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  await saveCurrent();
+}
+
+// ---------------- 5분 자동 임시저장 (기기 내부, 조용히) ----------------
+function startBackupInterval(){
+  stopBackupInterval();
+  if(!autoBackupEnabled) return;
+  backupIntervalId = setInterval(()=>runAutoBackup(), BACKUP_INTERVAL_MS);
+}
+function stopBackupInterval(){
+  if(backupIntervalId){ clearInterval(backupIntervalId); backupIntervalId = null; }
+}
+
+async function runAutoBackup(){
+  if(!autoBackupEnabled) return;
+  if(!hasAnyData(currentVisits)) return;
+  const now = Date.now();
+  if(now - lastBackupAt < BACKUP_SAFETY_GAP_MS) return;
+  lastBackupAt = now;
+  try{
+    const payload = {
+      savedAt: new Date().toISOString(),
+      date: currentDate,
+      visits: currentVisits,
+    };
+    await storage.set(BACKUP_KEY, JSON.stringify(payload));
+    const lb = $('lastBackup');
+    if(lb) lb.textContent = '임시저장 ' + nowHHMMSS().slice(0,5);
+  }catch(e){ /* 자동저장(storage)은 계속 유지되므로 조용히 무시 */ }
+}
+
+$('autoBackupToggle').addEventListener('change', (e)=>{
+  autoBackupEnabled = e.target.checked;
+  saveSettings();
+  if(autoBackupEnabled){ startBackupInterval(); showToast('5분 자동 임시저장 켜짐'); }
+  else { stopBackupInterval(); showToast('5분 자동 임시저장 꺼짐'); }
+});
+
+// 화면을 벗어나거나(다른 앱 전환·화면 잠금) 탭이 닫히기 직전:
+// 디바운스 대기 중인 저장을 즉시 반영하고 백업도 남긴다 (데이터 유실 방지)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ flushSave(); runAutoBackup(); }
+});
+window.addEventListener('pagehide', ()=>{ flushSave(); });
+
+// ---------------- 리포트 텍스트 ----------------
+function buildReportText(dateStr, visits){
+  const lines = [];
+  lines.push('방문일지 '+dateStr+' ('+weekdayKR(dateStr)+')');
+  lines.push('='.repeat(28));
+  let count = 0;
+  visits.forEach((v, i)=>{
+    if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
+    count++;
+    lines.push('');
+    lines.push('[방문 '+(i+1)+']');
+    lines.push('방문시각: '+(v.time || '-'));
+    lines.push('주소: '+(v.addr||'-'));
+    lines.push('상호: '+(v.name||'-'));
+    if(v.changed) lines.push('변경상호: '+v.changed);
+    lines.push('특이사항: '+(v.note||'-'));
+    lines.push('방문담당자명: '+(v.visitor||'-'));
+  });
+  if(count===0){ lines.push(''); lines.push('(입력된 방문 기록 없음)'); }
+  return lines.join('\n');
+}
+
+function parseReportText(text){
+  const dateMatch = text.match(/방문일지\s+(\d{4}-\d{2}-\d{2})/);
+  const parsedDate = dateMatch ? dateMatch[1] : null;
+  const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1); // [num, body, num, body, ...]
+  const visits = emptyVisits();
+  for(let i=0; i<blocks.length-1; i+=2){
+    const num = parseInt(blocks[i], 10);
+    const body = blocks[i+1] || '';
+    if(!(num>=1 && num<=4)) continue;
+    const get = (label) => {
+      const m = body.match(new RegExp(label + ':\\s*(.*)'));
+      if(!m) return '';
+      const v = m[1].trim();
+      return v === '-' ? '' : v;
+    };
+    visits[num-1] = {
+      time: get('방문시각'),
+      addr: get('주소').slice(0, LIMITS.addr),
+      name: get('상호').slice(0, LIMITS.name),
+      changed: get('변경상호').slice(0, LIMITS.changed),
+      note: get('특이사항').slice(0, LIMITS.note),
+      visitor: get('방문담당자명').slice(0, LIMITS.visitor),
+    };
+  }
+  return { date: parsedDate, visits, hasData: hasAnyData(visits) };
+}
+
+// ---------------- 저장 (공유 또는 파일 다운로드) ----------------
+async function doShare(){
+  await flushSave();
+  const text = buildReportText(currentDate, currentVisits);
+  // 파일명에 저장 시각(시분) 포함 → 누를 때마다 새 파일, 덮어쓰기 없음
+  const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.txt';
+  const file = new File([text], filename, {type:'text/plain'});
+
+  if(navigator.share){
+    try{
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({ files:[file], title:filename, text:'방문일지 '+currentDate });
+        return;
+      }
+      await navigator.share({ title: filename, text: text });
+      return;
+    }catch(e){
+      if(e && e.name === 'AbortError') return; // 사용자가 취소
+    }
+  }
+  // 폴백: 파일 다운로드
+  downloadTextFile(filename, text);
+  showToast(filename+' 저장됨');
+}
+
+function downloadTextFile(filename, text){
+  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  // 즉시 해제하면 일부 브라우저에서 다운로드가 취소될 수 있어 지연 해제
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+// ---------------- 불러오기 (.txt / .json 모두 지원) ----------------
+async function doImport(file){
+  let text;
+  try{
+    text = await file.text();
+  }catch(e){
+    showToast('파일을 읽지 못했습니다');
+    return;
+  }
+
+  let date = null, visits = emptyVisits(), hasData = false;
+  try{
+    const trimmed = text.trim();
+    const isJsonName = /\.json$/i.test(file.name || '');
+    if(isJsonName || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
+      // JSON 저장 파일 (앱/웹의 내부 저장 형식)
+      const parsed = JSON.parse(trimmed);
+      visits = normalizeVisits(parsed);
+      hasData = hasAnyData(visits);
+      const dm = (file.name || '').match(/(\d{4}-\d{2}-\d{2})/);
+      date = dm ? dm[1] : null;
+    } else {
+      // 텍스트 리포트 파일
+      const r = parseReportText(text);
+      date = r.date; visits = r.visits; hasData = r.hasData;
+    }
+  }catch(e){
+    showToast('파일 내용을 해석하지 못했습니다');
+    return;
+  }
+
+  if(!hasData){
+    showToast('파일에서 기록을 찾지 못했습니다');
+    return;
+  }
+
+  await flushSave();
+  if(date && DATE_KEY_RE.test(date)) currentDate = date;
+  currentVisits = visits;
+  $('dateInput').value = currentDate;
+  $('weekdayLabel').textContent = weekdayKR(currentDate);
+  renderCards();
+  await saveCurrent();
+  switchTab('day');
+  showToast(currentDate+' 기록을 불러왔습니다');
+}
+
+$('importBtn').addEventListener('click', ()=>{ $('importFile').click(); });
+$('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if(file) doImport(file);
+  e.target.value = '';
+});
+
+// ---------------- 복사 ----------------
+async function doCopy(){
+  await flushSave();
+  const text = buildReportText(currentDate, currentVisits);
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast('클립보드에 복사했습니다');
+  }catch(e){
+    // 구형 브라우저 폴백
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      showToast('클립보드에 복사했습니다');
+    }catch(e2){
+      showToast('복사 실패 — 직접 선택해 복사해주세요');
+    }
+  }
+}
+
+// ---------------- 날짜 이동 ----------------
+async function shiftDate(deltaDays){
+  await flushSave();
+  const d = new Date(currentDate+'T00:00:00');
+  d.setDate(d.getDate()+deltaDays);
+  const next = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  loadDate(next);
+}
+
+// ---------------- 빠른 검색 (v9) ----------------
+// 카드 1장을 하나의 그룹으로 보고, 주소/상호/변경상호/특이사항/담당자/시각 중
+// 하나라도 검색 단어를 포함하면 해당 카드 전체를 결과에 나열한다.
+// 모든 날짜의 저장 기록을 대상으로 한다.
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escapeRegExp(s){
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function highlight(text, query){
+  const safe = escapeHtml(text);
+  if(!query) return safe;
+  const re = new RegExp(escapeRegExp(escapeHtml(query)), 'gi');
+  return safe.replace(re, (m)=>'<mark>'+m+'</mark>');
+}
+
+async function doSearch(){
+  const q = $('searchInput').value.trim();
+  if(!q){ showToast('검색어를 입력하세요'); return; }
+  await flushSave(); // 입력 직후 저장 대기 중인 내용도 검색에 포함
+  const query = q.toLowerCase();
+  const scope = $('searchScope').value; // all 또는 특정 필드 키
+  const searchFields = scope === 'all'
+    ? ['visitor','addr','name','changed','note','time']
+    : [scope];
+  const results = [];
+  try{
+    const res = await storage.list('visit-log:');
+    const keys = (res && res.keys ? res.keys : [])
+      .filter(k => DATE_KEY_RE.test(k.replace('visit-log:','')))
+      .sort().reverse(); // 최신 날짜부터
+    for(const k of keys){
+      const dateStr = k.replace('visit-log:','');
+      let visits = emptyVisits();
+      try{
+        const r = await storage.get(k);
+        const parsed = r && r.value ? JSON.parse(r.value) : null;
+        visits = normalizeVisits(parsed);
+      }catch(e){ continue; } // 깨진 기록은 건너뜀
+      visits.forEach((v, idx) => {
+        if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
+        // 어느 항목이 일치했는지 함께 기록 (결과에 '일치 항목'으로 표시)
+        const matched = [];
+        searchFields.forEach((k)=>{
+          if(String(v[k]||'').toLowerCase().indexOf(query) !== -1){
+            matched.push(FIELD_LABEL[k]);
+          }
+        });
+        if(matched.length > 0){
+          results.push({ date: dateStr, idx: idx, visit: v, matched: matched });
+        }
+      });
+    }
+  }catch(e){
+    showToast('검색 중 오류가 발생했습니다');
+    return;
+  }
+  renderSearchResults(q, results, $('searchScope').selectedOptions[0].textContent);
+}
+
+function renderSearchResults(query, results, scopeLabel){
+  $('searchMeta').textContent = '"' + query + '"' + (scopeLabel && scopeLabel !== '전체' ? ' [범위: ' + scopeLabel + ']' : '') + ' 검색 결과: ' + results.length + '건';
+  const wrap = $('searchResults');
+  wrap.innerHTML = '';
+  if(results.length === 0){
+    wrap.innerHTML = '<div class="empty">검색 결과가 없습니다</div>';
+  }
+  results.forEach((r) => {
+    const v = r.visit;
+    // 결과 카드도 입력 폼과 같은 순서: 담당자명이 맨 위
+    const rows = [
+      ['방문담당자명', v.visitor || '-'],
+      ['방문시각', v.time || '-'],
+      ['주소', v.addr || '-'],
+      ['상호', v.name || '-'],
+    ];
+    if(v.changed) rows.push(['변경상호', v.changed]);
+    rows.push(['특이사항', v.note || '-']);
+
+    const card = document.createElement('div');
+    card.className = 'card result-card';
+    card.innerHTML =
+      '<div class="card-head">'
+      + '<div class="stub-num">' + (r.idx+1) + '</div>'
+      + '<div class="result-head-main">'
+      +   '<div class="result-date">' + r.date + ' (' + weekdayKR(r.date) + ') · 방문 ' + (r.idx+1) + ' / 4</div>'
+      +   '<div class="result-visitor">' + highlight(v.visitor || '(담당자 없음)', query) + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="result-body">'
+      + '<div class="result-row"><div class="rk">일치 항목</div><div class="rv">'
+      +   r.matched.map((m)=>'<span class="result-match">' + m + '</span>').join(' ')
+      + '</div></div>'
+      + rows.map((row) =>
+          '<div class="result-row"><div class="rk">' + row[0] + '</div>'
+          + '<div class="rv">' + highlight(row[1], query) + '</div></div>'
+        ).join('')
+      + '</div>';
+    // 결과 카드를 누르면 해당 날짜의 기록으로 이동
+    card.addEventListener('click', async ()=>{
+      await flushSave();
+      loadDate(r.date);
+      clearSearch();
+      showToast(r.date + ' 기록으로 이동했습니다');
+    });
+    wrap.appendChild(card);
+  });
+  showSearchView(true);
+}
+
+function showSearchView(show){
+  const searchView = $('searchView');
+  if(show){
+    $('dayView').classList.add('hide');
+    $('historyView').classList.remove('show');
+    searchView.classList.add('show');
+    $('actionbar').style.display = 'none';
+    $('searchClear').style.display = '';
+    $('tabDay').classList.remove('active');
+    $('tabHistory').classList.remove('active');
+  } else {
+    searchView.classList.remove('show');
+    $('searchClear').style.display = 'none';
+    $('actionbar').style.display = 'flex';
+    $('historyView').classList.remove('show');
+    $('dayView').classList.remove('hide');
+    $('tabHistory').classList.remove('active');
+    $('tabDay').classList.add('active');
+  }
+}
+
+function clearSearch(){
+  $('searchInput').value = '';
+  showSearchView(false);
+}
+
+$('searchBtn').addEventListener('click', doSearch);
+$('searchClear').addEventListener('click', clearSearch);
+$('searchInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){ e.preventDefault(); doSearch(); }
+});
+
+// ---------------- 지난 기록 ----------------
+async function renderHistory(){
+  const listEl = $('historyList');
+  listEl.innerHTML = '<div class="empty">불러오는 중…</div>';
+  try{
+    const res = await storage.list('visit-log:');
+    const keys = (res && res.keys ? res.keys : [])
+      .filter(k => {
+        if(k === SETTINGS_KEY || k === BACKUP_KEY || k === 'visit-log:dates') return false;
+        const dateStr = k.replace('visit-log:','');
+        return DATE_KEY_RE.test(dateStr); // 깨진 키 제외
+      })
+      .sort().reverse();
+    if(keys.length === 0){
+      listEl.innerHTML = '<div class="empty">저장된 기록이 없습니다</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    let shown = 0;
+    for(const k of keys){
+      const dateStr = k.replace('visit-log:','');
+      let visits = emptyVisits();
+      try{
+        const r = await storage.get(k);
+        const parsed = r && r.value ? JSON.parse(r.value) : null;
+        visits = normalizeVisits(parsed);
+      }catch(e){ continue; }
+      const filled = countFilled(visits);
+      if(filled === 0) continue;
+      shown++;
+      const item = document.createElement('div');
+      item.className = 'hist-item';
+      item.innerHTML = '<div><div class="hist-date">'+dateStr+'</div>'
+        + '<div class="hist-meta">'+weekdayKR(dateStr)+'</div></div>'
+        + '<div class="hist-count">'+filled+'건</div>';
+      item.addEventListener('click', async ()=>{
+        await flushSave();
+        loadDate(dateStr);
+        switchTab('day');
+      });
+      listEl.appendChild(item);
+    }
+    if(shown === 0){
+      listEl.innerHTML = '<div class="empty">저장된 기록이 없습니다</div>';
+    }
+  }catch(e){
+    listEl.innerHTML = '<div class="empty">기록을 불러오지 못했습니다</div>';
+  }
+}
+
+function switchTab(tab){
+  const dayView = $('dayView');
+  const histView = $('historyView');
+  const tabDay = $('tabDay');
+  const tabHist = $('tabHistory');
+  const actionbar = $('actionbar');
+  // 탭 전환 시 검색 결과는 닫는다
+  $('searchView').classList.remove('show');
+  $('searchClear').style.display = 'none';
+  if(tab==='day'){
+    dayView.classList.remove('hide'); histView.classList.remove('show');
+    tabDay.classList.add('active'); tabHist.classList.remove('active');
+    actionbar.style.display = 'flex';
+  } else {
+    dayView.classList.add('hide'); histView.classList.add('show');
+    tabHist.classList.add('active'); tabDay.classList.remove('active');
+    actionbar.style.display = 'none';
+    renderHistory();
+  }
+}
+
+$('prevDay').addEventListener('click', ()=>shiftDate(-1));
+$('nextDay').addEventListener('click', ()=>shiftDate(1));
+$('dateInput').addEventListener('change', async (e)=>{
+  if(e.target.value && DATE_KEY_RE.test(e.target.value)){
+    await flushSave();
+    loadDate(e.target.value);
+  }
+});
+$('tabDay').addEventListener('click', async ()=>{ await flushSave(); switchTab('day'); });
+$('tabHistory').addEventListener('click', async ()=>{ await flushSave(); switchTab('history'); });
+$('shareBtn').addEventListener('click', doShare);
+$('copyBtn').addEventListener('click', doCopy);
+
+loadSettings().then(()=>{
+  loadDate(currentDate);
+  startBackupInterval();
+});
+</script>
+<script>
+// PWA: 서비스워커 등록 (오프라인 실행 + 홈 화면 설치 지원)
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
