@@ -12,8 +12,16 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v11
+  방문일지 (Visit Log) v12
   =========================
+  v11 → v12 개선 사항:
+  1. '저장' 결과물을 텍스트(.txt)에서 웹 페이지(.html)로 변경:
+     - 저장 버튼을 누르면 그 날짜의 기록이 예쁘게 표 형식으로 정리된
+       HTML 파일로 저장/공유됨 → 브라우저로 열면 바로 보고 인쇄 가능.
+     - 파일 안에 기록 데이터(JSON)도 함께 내장되어 있어서, 앱의
+       '불러오기'로 이 HTML 파일을 선택하면 기록이 그대로 복원됨.
+       (기존 .txt/.json 파일 불러오기도 계속 지원)
+
   v10 → v11 개선 사항:
   1. 검색 범위 선택 추가: 검색창 왼쪽의 범위 선택(전체/담당자명/주소/
      상호/변경상호/특이사항)으로 검색 대상 항목을 제한 가능.
@@ -334,7 +342,7 @@
 
 <header>
   <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v11</span></div>
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v12</span></div>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <h1>오늘의 방문 기록</h1>
@@ -396,7 +404,7 @@
   <button class="btn-copy" id="copyBtn" type="button">복사</button>
   <button class="btn-share" id="shareBtn" type="button">저장</button>
 </div>
-<input type="file" id="importFile" accept=".txt,.json,text/plain,application/json" style="display:none">
+<input type="file" id="importFile" accept=".txt,.json,.html,.htm,text/plain,application/json,text/html" style="display:none">
 
 <div class="toast" id="toast"></div>
 
@@ -726,6 +734,68 @@ function buildReportText(dateStr, visits){
   return lines.join('\n');
 }
 
+// ---------------- HTML 리포트 (보기용 웹 페이지 + 데이터 내장) ----------------
+function buildReportHtml(dateStr, visits){
+  const esc = (s)=>escapeHtml(String(s||''));
+  const row = (k, val)=>'<div class="r"><div class="k">'+k+'</div><div class="v">'+esc(val||'-')+'</div></div>';
+  let count = 0;
+  const cards = [];
+  visits.forEach((v, i)=>{
+    if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
+    count++;
+    cards.push(
+      '<section class="card"><div class="ch">방문 '+(i+1)+'</div><div class="cb">'
+      + row('방문담당자명', v.visitor)
+      + row('방문시각', v.time)
+      + row('주소', v.addr)
+      + row('상호', v.name)
+      + (v.changed ? row('변경상호', v.changed) : '')
+      + row('특이사항', v.note)
+      + '</div></section>');
+  });
+  const body = count === 0
+    ? '<p class="empty">입력된 방문 기록이 없습니다</p>'
+    : cards.join('\n');
+  // 데이터를 파일 안에 내장 → 앱의 '불러오기'로 이 파일을 열면 기록 복원 가능
+  const dataJson = JSON.stringify({ date: dateStr, visits: visits }).replace(/</g, '\\u003c');
+  return '<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+    + '<title>방문일지 ' + esc(dateStr) + '</title>\n'
+    + '<style>\n'
+    + 'body{margin:0;background:#f5f1e8;color:#22291f;font-family:\'Noto Sans KR\',\'Malgun Gothic\',sans-serif;}\n'
+    + 'main{max-width:520px;margin:0 auto;padding:20px 16px 40px;}\n'
+    + 'header{margin-bottom:16px;}\n'
+    + 'h1{font-family:\'Noto Serif KR\',serif;font-size:24px;margin:0 0 4px;color:#123f38;}\n'
+    + '.meta{font-size:13px;color:#0f6a5f;font-weight:600;}\n'
+    + '.card{background:#fff;border:1.5px solid #22291f;margin-bottom:12px;}\n'
+    + '.ch{background:#0f6a5f;color:#fff;font-weight:700;font-size:14px;padding:8px 12px;}\n'
+    + '.cb{padding:6px 12px 10px;}\n'
+    + '.r{display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed #d8d2c2;font-size:14px;}\n'
+    + '.r:last-child{border-bottom:none;}\n'
+    + '.k{flex:0 0 92px;color:#5b6353;font-weight:600;}\n'
+    + '.v{flex:1;word-break:break-all;white-space:pre-wrap;}\n'
+    + '.empty{color:#5b6353;text-align:center;padding:30px 0;}\n'
+    + 'footer{margin-top:18px;font-size:11.5px;color:#8a8f80;text-align:center;line-height:1.6;}\n'
+    + '@media print{body{background:#fff;}.card{border:1px solid #999;break-inside:avoid;}}\n'
+    + '</style>\n</head>\n<body>\n<main>\n'
+    + '<header><h1>방문일지</h1><div class="meta">' + esc(dateStr) + ' (' + weekdayKR(dateStr) + ') · 총 ' + count + '건</div></header>\n'
+    + body + '\n'
+    + '<footer>방문일지 앱에서 저장한 파일입니다.<br>앱의 [불러오기]에서 이 파일을 선택하면 기록이 그대로 복원됩니다.</footer>\n'
+    + '</main>\n'
+    + '<script type="application/json" id="visit-log-data">' + dataJson + '<\/script>\n'
+    + '</body>\n</html>';
+}
+
+// HTML 리포트 파일에서 내장 데이터(JSON) 추출
+function extractReportHtmlJson(text){
+  const m = text.match(/<script type="application\/json" id="visit-log-data">([\s\S]*?)<\/script>/);
+  if(!m) return null;
+  try{
+    const d = JSON.parse(m[1]);
+    return (d && d.visits) ? d : null;
+  }catch(e){ return null; }
+}
+
 function parseReportText(text){
   const dateMatch = text.match(/방문일지\s+(\d{4}-\d{2}-\d{2})/);
   const parsedDate = dateMatch ? dateMatch[1] : null;
@@ -753,13 +823,13 @@ function parseReportText(text){
   return { date: parsedDate, visits, hasData: hasAnyData(visits) };
 }
 
-// ---------------- 저장 (공유 또는 파일 다운로드) ----------------
+// ---------------- 저장 (보기용 HTML 파일 공유 또는 다운로드) ----------------
 async function doShare(){
   await flushSave();
-  const text = buildReportText(currentDate, currentVisits);
+  const html = buildReportHtml(currentDate, currentVisits);
   // 파일명에 저장 시각(시분) 포함 → 누를 때마다 새 파일, 덮어쓰기 없음
-  const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.txt';
-  const file = new File([text], filename, {type:'text/plain'});
+  const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.html';
+  const file = new File([html], filename, {type:'text/html'});
 
   if(navigator.share){
     try{
@@ -767,19 +837,17 @@ async function doShare(){
         await navigator.share({ files:[file], title:filename, text:'방문일지 '+currentDate });
         return;
       }
-      await navigator.share({ title: filename, text: text });
-      return;
     }catch(e){
       if(e && e.name === 'AbortError') return; // 사용자가 취소
     }
   }
   // 폴백: 파일 다운로드
-  downloadTextFile(filename, text);
+  downloadFile(filename, html, 'text/html');
   showToast(filename+' 저장됨');
 }
 
-function downloadTextFile(filename, text){
-  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+function downloadFile(filename, text, mime){
+  const blob = new Blob([text], {type:(mime||'text/plain')+';charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
@@ -802,7 +870,15 @@ async function doImport(file){
   try{
     const trimmed = text.trim();
     const isJsonName = /\.json$/i.test(file.name || '');
-    if(isJsonName || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
+    const isHtmlName = /\.html?$/i.test(file.name || '');
+    if(isHtmlName || trimmed.indexOf('id="visit-log-data"') !== -1){
+      // v12 HTML 리포트 파일: 내장된 JSON 데이터로 복원
+      const d = extractReportHtmlJson(trimmed);
+      if(!d){ showToast('HTML 파일에서 기록을 찾지 못했습니다'); return; }
+      visits = normalizeVisits(d.visits);
+      hasData = hasAnyData(visits);
+      date = (d.date && DATE_KEY_RE.test(d.date)) ? d.date : null;
+    } else if(isJsonName || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
       // JSON 저장 파일 (앱/웹의 내부 저장 형식)
       const parsed = JSON.parse(trimmed);
       visits = normalizeVisits(parsed);
