@@ -12,8 +12,20 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v12
+  방문일지 (Visit Log) v13
   =========================
+  v12 → v13 개선 사항:
+  1. '링크공유' 기능 추가: 서버/DB 없이, 오늘 기록을 URL(#data=...)에
+     담아 카톡 등으로 전송 가능. 받는 사람이 그 링크를 열면 자동으로
+     해당 기록이 채워짐. 카메라(QR 스캔) 불필요, 텍스트 링크만 오가면 됨.
+     - 외부 라이브러리 없이 브라우저 내장 기능(UTF-8 safe Base64)만 사용
+       → 오프라인(PWA)에서도 100% 동일하게 동작.
+     - '링크공유' 버튼: 현재 보고 있는 날짜의 기록을 링크로 만들어
+       공유 시트(카톡 등)를 띄우거나, 지원 안 되면 클립보드에 복사.
+     - 앱 접속 시 주소 뒤에 #data=... 가 있으면 자동으로 해석해서
+       화면에 채우고, 처리 후 주소는 깨끗하게 정리(재접속 시 중복 방지).
+     - 기존 저장(.html)/복사/불러오기(.txt·.json·.html)는 그대로 유지.
+
   v11 → v12 개선 사항:
   1. '저장' 결과물을 텍스트(.txt)에서 웹 페이지(.html)로 변경:
      - 저장 버튼을 누르면 그 날짜의 기록이 예쁘게 표 형식으로 정리된
@@ -299,12 +311,14 @@
     background:var(--paper); border-top:2px solid var(--ink);
   }
   .actionbar button{
-    flex:1; padding:13px; font-size:14px; font-weight:700;
+    flex:1; padding:13px 4px; font-size:13px; font-weight:700;
     border:1.5px solid var(--ink); cursor:pointer;
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+    white-space:nowrap;
   }
   .btn-share{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
   .btn-copy{ background:var(--card); color:var(--ink); }
+  .btn-link{ background:var(--brick); color:#fff; border-color:var(--brick); }
 
   .history{ display:none; }
   .history.show{ display:block; }
@@ -402,6 +416,7 @@
 <div class="actionbar" id="actionbar">
   <button class="btn-copy" id="importBtn" type="button">불러오기</button>
   <button class="btn-copy" id="copyBtn" type="button">복사</button>
+  <button class="btn-link" id="linkShareBtn" type="button">링크공유</button>
   <button class="btn-share" id="shareBtn" type="button">저장</button>
 </div>
 <input type="file" id="importFile" accept=".txt,.json,.html,.htm,text/plain,application/json,text/html" style="display:none">
@@ -942,6 +957,95 @@ async function doCopy(){
   }
 }
 
+// ---------------- 링크공유 (서버 없이 URL에 데이터 담아 전송) ----------------
+// 원리: 오늘 기록(JSON)을 UTF-8 safe Base64로 인코딩 → URL 뒤(#data=...)에 붙임.
+// 이 링크를 카톡 등으로 보내면, 받는 사람이 열었을 때 아래 loadFromLinkIfPresent()가
+// 자동으로 해석해서 화면에 채워줌. 외부 라이브러리 없이 브라우저 내장 기능만
+// 사용하므로 오프라인(PWA)에서도 동일하게 동작함.
+function encodeShareData(dateStr, visits){
+  const payload = JSON.stringify({ d: dateStr, v: visits });
+  const bytes = new TextEncoder().encode(payload);
+  let binary = '';
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function decodeShareData(encoded){
+  try{
+    let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while(b64.length % 4) b64 += '=';
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const json = new TextDecoder().decode(bytes);
+    const obj = JSON.parse(json);
+    return { date: obj.d, visits: normalizeVisits(obj.v) };
+  }catch(e){ return null; }
+}
+
+async function doShareLink(){
+  await flushSave();
+  if(!hasAnyData(currentVisits)){
+    showToast('공유할 기록이 없습니다');
+    return;
+  }
+  const encoded = encodeShareData(currentDate, currentVisits);
+  const link = location.origin + location.pathname + '#data=' + encoded;
+
+  if(navigator.share){
+    try{
+      await navigator.share({ title:'방문일지 '+currentDate, text:'방문일지 링크 공유 ('+currentDate+')', url: link });
+      return;
+    }catch(e){
+      if(e && e.name === 'AbortError') return; // 사용자가 공유 취소
+      // 공유 실패 시 아래 클립보드 복사로 대체
+    }
+  }
+  try{
+    await navigator.clipboard.writeText(link);
+    showToast('공유 링크가 복사되었습니다 — 카톡에 붙여넣기 하세요');
+  }catch(e){
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      showToast('공유 링크가 복사되었습니다 — 카톡에 붙여넣기 하세요');
+    }catch(e2){
+      showToast('링크 생성 실패 — 브라우저가 지원하지 않습니다');
+    }
+  }
+}
+
+// 앱 접속 시 주소 뒤에 #data=... 가 있으면 자동으로 읽어들여 화면에 채움
+async function loadFromLinkIfPresent(){
+  const hash = location.hash;
+  if(!hash || hash.indexOf('#data=') !== 0) return false;
+  const encoded = hash.slice('#data='.length);
+  // 처리 여부와 상관없이 즉시 주소에서 제거 (새로고침/재접속 시 중복 적용 방지)
+  history.replaceState(null, '', location.pathname + location.search);
+
+  const decoded = decodeShareData(encoded);
+  if(!decoded || !hasAnyData(decoded.visits)){
+    showToast('공유 링크에서 기록을 찾지 못했습니다');
+    return false;
+  }
+  await flushSave();
+  if(decoded.date && DATE_KEY_RE.test(decoded.date)) currentDate = decoded.date;
+  currentVisits = decoded.visits;
+  $('dateInput').value = currentDate;
+  $('weekdayLabel').textContent = weekdayKR(currentDate);
+  renderCards();
+  await saveCurrent();
+  switchTab('day');
+  showToast(currentDate+' 공유 링크에서 기록을 불러왔습니다');
+  return true;
+}
+
+$('linkShareBtn').addEventListener('click', doShareLink);
+
 // ---------------- 날짜 이동 ----------------
 async function shiftDate(deltaDays){
   await flushSave();
@@ -1178,8 +1282,11 @@ $('tabHistory').addEventListener('click', async ()=>{ await flushSave(); switchT
 $('shareBtn').addEventListener('click', doShare);
 $('copyBtn').addEventListener('click', doCopy);
 
-loadSettings().then(()=>{
-  loadDate(currentDate);
+loadSettings().then(async ()=>{
+  const loadedFromLink = await loadFromLinkIfPresent();
+  if(!loadedFromLink){
+    loadDate(currentDate);
+  }
   startBackupInterval();
 });
 </script>
