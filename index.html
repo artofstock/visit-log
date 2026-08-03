@@ -12,20 +12,70 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v13
+  방문일지 (Visit Log) v12
   =========================
-  v12 → v13 개선 사항:
-  1. 방문처를 고정 4곳에서 N개(최대 12개)로 확장:
-     - 기본 4곳 표시, [+ 방문 추가] 버튼으로 1개씩 추가 가능.
-     - 기존 저장 데이터와 100% 호환 (배열 길이 그대로 유지).
-  2. 하단 액션바에 [링크공유] 버튼 추가:
-     - 데이터를 간단히 암호화(XOR+Base64)하여 URL 해시에 담음.
-     - 카카오톡 등으로 링크를 받은 사람이 열면 동일한 화면 표시.
-     - 기존 불러오기/복사/저장 버튼도 그대로 유지.
-  3. 카드 단위 페이지 스크롤:
-     - CSS scroll-snap으로 한 번 스와이프 시 한 카드씩 정확히 정렬.
-     - 카드가 뷰포트를 채우도록 높이 조정 → 매번 맨 위부터 스크롤하지 않음.
-     - 페이지 인디케이터(점)로 현재 위치 표시.
+  v11 → v12 개선 사항:
+  1. '저장' 결과물을 텍스트(.txt)에서 웹 페이지(.html)로 변경:
+     - 저장 버튼을 누르면 그 날짜의 기록이 예쁘게 표 형식으로 정리된
+       HTML 파일로 저장/공유됨 → 브라우저로 열면 바로 보고 인쇄 가능.
+     - 파일 안에 기록 데이터(JSON)도 함께 내장되어 있어서, 앱의
+       '불러오기'로 이 HTML 파일을 선택하면 기록이 그대로 복원됨.
+       (기존 .txt/.json 파일 불러오기도 계속 지원)
+
+  v10 → v11 개선 사항:
+  1. 검색 범위 선택 추가: 검색창 왼쪽의 범위 선택(전체/담당자명/주소/
+     상호/변경상호/특이사항)으로 검색 대상 항목을 제한 가능.
+     - '전체'는 기존처럼 카드 전체를 그룹으로 검색.
+     - '담당자명'으로 검색하면 방문담당자명 항목에만 해당 단어가 있는
+       카드만 나열되어, 특이사항에 이름이 적힌 다른 담당자의 카드가
+       섞여 나오는 혼란을 막을 수 있음.
+     - 범위를 좁혀 검색하면 결과 상단에 [범위: 항목명]이 표시됨.
+  2. 특이사항 글자수 제한 50자 → 100자로 확대.
+
+  v9 → v10 개선 사항:
+  1. 입력 항목 순서 변경: 방문담당자명을 맨 위(방문주소 위)로,
+     특이사항은 맨 아래로. (저장 키 이름은 그대로라 기존 데이터와
+     100% 호환됩니다)
+  2. 검색 결과에 '일치 항목' 태그 표시: 카드 그룹 단위 검색이라
+     주소/상호/특이사항 등 어떤 항목이 일치해도 카드가 나오는데,
+     어느 항목이 일치했는지 안 보여서 "이름이 바뀐 것처럼" 보일 수
+     있던 문제 → 각 결과 카드에 일치한 항목을 명확히 표시.
+     결과 카드 머리에도 담당자 이름을 바로 보이게 추가.
+  3. 브라우저 자동완성(autofill) 오염 방지: 모바일 브라우저가 한 카드에
+     입력한 담당자 이름을 다른 카드의 담당자란에도 자동으로 채워
+     저장해버리는 사례 방지 (autocomplete/data-lpignore 속성 강화).
+
+  v8 → v9 개선 사항:
+  1. 빠른 검색 기능 추가: 상단 검색창 + 검색 버튼(또는 Enter)으로
+     모든 날짜의 기록에서 단어가 포함된 카드를 찾아 아래에 전체 나열.
+     - 카드 1장을 하나의 그룹으로 검색 (주소/상호/변경상호/특이사항/
+       담당자/시각 중 하나라도 단어가 포함되면 해당 카드가 결과에 표시)
+     - 결과에 검색 단어를 노랗게 하이라이트
+     - 결과 카드를 누르면 해당 날짜 기록으로 바로 이동
+     - '닫기' 버튼으로 검색 결과를 닫고 원래 화면으로 복귀
+
+  v7 → v8 개선 사항:
+  1. (치명적 버그) 저장소가 window.storage(특수 환경 전용)에만 의존해서
+     일반 브라우저에서 열면 저장이 전혀 되지 않던 문제 수정
+     → window.storage 가 없으면 localStorage 를 쓰는 어댑터 추가.
+     이제 크롬/사파리/삼성 인터넷 등 어떤 브라우저에서도 데이터가 유지됨.
+  2. 방문주소 글자수 제한 50자 → 80자로 확대.
+  3. 상단에 작성 진행 칩 "작성 n/4" 추가.
+  4. 5분 자동 백업 방식 변경: 브라우저에서 5분마다 파일 다운로드를
+     강제로 띄우던(브라우저가 차단하거나 다운로드 폴더가 지저분해지던)
+     방식 → 기기 내부 저장소에 조용히 백업하는 방식으로 교체.
+  5. '저장' 파일명에 날짜+시각(시분) 포함 → 누를 때마다 새 파일,
+     실수로 눌러도 이전 파일을 덮어쓰지 않음.
+  6. 불러오기: .txt 리포트뿐 아니라 .json 저장 파일도 지원.
+  7. 손상된 저장 데이터(배열 길이 부족, 타입 오류 등)를 만나도
+     앱이 죽지 않고 안전하게 보정해서 표시.
+  8. 화면 이탈(다른 앱 전환/탭 닫기) 시 즉시 저장 — 입력 직후
+     나가도 마지막 글자까지 유실되지 않음.
+  9. 지난 기록 목록에서 백업/설정 키와 깨진 날짜 키 제외.
+  10. 공유/다운로드 폴백의 objectURL 해제 타이밍 수정
+      (즉시 해제하면 일부 브라우저에서 다운로드가 취소될 수 있음).
+  11. 모바일 키보드 편의: 입력란 enterkeyhint="next" 적용,
+      폰트에 맑은고딕 폴백 추가.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -182,17 +232,12 @@
     margin-bottom:16px;
     position:relative;
     box-shadow: 3px 3px 0 var(--line);
-    scroll-snap-align: start;
-    min-height: calc(100dvh - 310px);
-    display:flex;
-    flex-direction:column;
   }
   .card-head{
     display:flex; align-items:center; gap:10px;
     padding:10px 14px;
     border-bottom:1.5px dashed var(--line);
     background:var(--paper-2);
-    flex-shrink:0;
   }
   .stub-num{
     font-family:'IBM Plex Mono',monospace;
@@ -219,14 +264,7 @@
     padding:6px 10px; cursor:pointer; white-space:nowrap;
   }
   .time-btn:active{ background:var(--teal-dark); color:#fff; }
-  .delete-btn{
-    font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600;
-    border:1.5px solid var(--brick); background:#fff; color:var(--brick);
-    padding:4px 8px; cursor:pointer; white-space:nowrap; margin-left:6px;
-  }
-  .delete-btn:active{ background:var(--brick); color:#fff; }
-  .card-body{ padding:14px; display:flex; flex-direction:column; gap:12px; flex:1; }
-  .card-body{ padding:14px; display:flex; flex-direction:column; gap:12px; flex:1; }
+  .card-body{ padding:14px; display:flex; flex-direction:column; gap:12px; }
   .field label{
     display:flex; justify-content:space-between; align-items:baseline;
     font-size:12.5px; font-weight:500; color:var(--ink-soft); margin-bottom:5px;
@@ -244,48 +282,6 @@
   .field input:focus, .field textarea:focus{ outline:none; border-color:var(--teal); }
   .field.flag input, .field.flag textarea{ border-color:#DCC9A8; background:#FBF6EC; }
 
-  /* 카드 스크롤 영역 */
-  .cards-scroll{
-    overflow-y: auto;
-    scroll-snap-type: y mandatory;
-    -webkit-overflow-scrolling: touch;
-    max-height: calc(100dvh - 280px);
-  }
-
-  /* 추가 버튼 */
-  .add-card-btn{
-    width:100%;
-    padding:16px;
-    font-size:14px; font-weight:700;
-    border:1.5px dashed var(--teal-dark);
-    background:var(--card);
-    color:var(--teal-dark);
-    cursor:pointer;
-    margin-bottom:16px;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-  }
-  .add-card-btn:active{ background:var(--teal-pale); }
-  .add-card-btn:disabled{
-    border-color:var(--line);
-    color:var(--ink-soft);
-    cursor:not-allowed;
-  }
-
-  /* 페이지 인디케이터 */
-  .page-dots{
-    display:flex; justify-content:center; align-items:center;
-    gap:6px; margin:4px 0 12px;
-  }
-  .page-dot{
-    width:7px; height:7px; border-radius:50%;
-    background:var(--line);
-    transition:all .2s ease;
-  }
-  .page-dot.active{
-    background:var(--teal-dark);
-    transform:scale(1.3);
-  }
-
   .save-row{
     display:flex; align-items:center; justify-content:space-between;
     padding:0 4px; margin:-4px 0 14px;
@@ -298,15 +294,14 @@
 
   .actionbar{
     position:fixed; bottom:0; left:0; right:0; z-index:5;
-    display:flex; gap:6px;
-    padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+    display:flex; gap:8px;
+    padding:12px 14px calc(12px + env(safe-area-inset-bottom));
     background:var(--paper); border-top:2px solid var(--ink);
   }
   .actionbar button{
-    flex:1; padding:12px 4px; font-size:13px; font-weight:700;
+    flex:1; padding:13px; font-size:14px; font-weight:700;
     border:1.5px solid var(--ink); cursor:pointer;
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-    white-space:nowrap;
   }
   .btn-share{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
   .btn-copy{ background:var(--card); color:var(--ink); }
@@ -340,12 +335,6 @@
     max-width:92vw; overflow:hidden; text-overflow:ellipsis;
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
-
-  /* 데스크톱에서도 카드 높이 제한 */
-  @media (min-width: 768px){
-    .card{ min-height: 520px; }
-    .cards-scroll{ max-height: 620px; }
-  }
 </style>
 </head>
 <body>
@@ -353,7 +342,7 @@
 
 <header>
   <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v13</span></div>
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v12</span></div>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <h1>오늘의 방문 기록</h1>
@@ -402,9 +391,7 @@
       </label>
       <span id="lastBackup">—</span>
     </div>
-    <div id="cardsWrap" class="cards-scroll"></div>
-    <div id="addVisitArea"></div>
-    <div id="pageDots" class="page-dots"></div>
+    <div id="cardsWrap"></div>
   </div>
 
   <div id="historyView" class="history">
@@ -415,7 +402,6 @@
 <div class="actionbar" id="actionbar">
   <button class="btn-copy" id="importBtn" type="button">불러오기</button>
   <button class="btn-copy" id="copyBtn" type="button">복사</button>
-  <button class="btn-copy" id="linkShareBtn" type="button">링크공유</button>
   <button class="btn-share" id="shareBtn" type="button">저장</button>
 </div>
 <input type="file" id="importFile" accept=".txt,.json,.html,.htm,text/plain,application/json,text/html" style="display:none">
@@ -426,7 +412,10 @@
 'use strict';
 
 // ===================================================================
-// 저장소 어댑터
+// 저장소 어댑터 (v8 핵심 수정)
+// window.storage(특수 환경 전용 API)가 있으면 그것을 쓰고,
+// 없으면(일반 브라우저) localStorage 를 쓴다.
+// 이전 버전은 일반 브라우저에서 저장이 전혀 되지 않았다.
 // ===================================================================
 const storage = (() => {
   if (window.storage && typeof window.storage.get === 'function') {
@@ -472,16 +461,9 @@ const FIELD_LABEL = {
 const SETTINGS_KEY = 'visit-log:settings';
 const BACKUP_KEY   = 'visit-log:backup';
 const DATE_KEY_RE  = /^\d{4}-\d{2}-\d{2}$/;
-const SAVE_DEBOUNCE_MS = 600;
-const BACKUP_INTERVAL_MS = 5 * 60 * 1000;
-const BACKUP_SAFETY_GAP_MS = 10000;
-
-// --- v13: 동적 방문처 수 ---
-const MAX_VISITS = 12;
-const DEFAULT_VISITS = 4;
-
-// --- v13: 링크 공유 암호화 키 ---
-const SHARE_KEY = 'visitlog-share-key-2024';
+const SAVE_DEBOUNCE_MS = 600;          // 입력 후 0.6초 뒤 자동 저장
+const BACKUP_INTERVAL_MS = 5 * 60 * 1000; // 5분마다 자동 임시저장
+const BACKUP_SAFETY_GAP_MS = 10000;    // 여러 트리거가 겹칠 때 최소 간격
 
 let currentDate = todayStr();
 let currentVisits = emptyVisits();
@@ -504,8 +486,8 @@ function nowHHMMSS(){
   const d = new Date();
   return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
 }
-function emptyVisits(n = DEFAULT_VISITS){
-  return Array.from({length: n}, ()=>({addr:'',name:'',changed:'',note:'',time:'',visitor:''}));
+function emptyVisits(){
+  return [0,1,2,3].map(()=>({addr:'',name:'',changed:'',note:'',time:'',visitor:''}));
 }
 const _weekdayCache = {};
 function weekdayKR(dateStr){
@@ -522,16 +504,14 @@ function hasAnyData(visits){
   return visits.some(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor);
 }
 
-// 손상된 저장 데이터를 안전하게 보정
+// 손상된 저장 데이터를 안전하게 보정 (앱이 죽지 않도록)
 function normalizeVisits(parsed){
   let raw = null;
   if (Array.isArray(parsed)) raw = parsed;
   else if (parsed && Array.isArray(parsed.visits)) raw = parsed.visits;
   if (!raw) return emptyVisits();
-  const targetLen = Math.min(MAX_VISITS, Math.max(DEFAULT_VISITS, raw.length));
-  const fixed = emptyVisits(targetLen);
-  for (let i = 0; i < targetLen; i++){
-    if (i >= raw.length) continue;
+  const fixed = emptyVisits();
+  for (let i = 0; i < Math.min(4, raw.length); i++){
     const src = raw[i];
     if (!src || typeof src !== 'object') continue;
     FIELD_META.forEach(m => {
@@ -588,90 +568,7 @@ function countFilled(visits){
 }
 
 function updateProgress(){
-  $('progressChip').textContent = '작성 ' + countFilled(currentVisits) + '/' + currentVisits.length;
-}
-
-function addVisit(){
-  if (currentVisits.length >= MAX_VISITS){
-    showToast('최대 ' + MAX_VISITS + '곳까지 추가 가능합니다');
-    return;
-  }
-  currentVisits.push({addr:'',name:'',changed:'',note:'',time:'',visitor:''});
-  renderCards();
-  scheduleSave();
-  showToast('방문 ' + currentVisits.length + ' 추가됨');
-  // 새 카드로 스크롤
-  setTimeout(()=>{
-    const wrap = $('cardsWrap');
-    wrap.scrollTop = wrap.scrollHeight;
-  }, 50);
-}
-
-function deleteVisit(idx){
-  if (currentVisits.length <= 1){
-    showToast('최소 1개는 남겨두어야 합니다');
-    return;
-  }
-  currentVisits.splice(idx, 1);
-  renderCards();
-  scheduleSave();
-  showToast('방문 ' + (idx+1) + ' 삭제됨');
-}
-
-function renderAddButton(){
-  if (currentVisits.length >= MAX_VISITS){
-    showToast('최대 ' + MAX_VISITS + '곳까지 추가 가능합니다');
-    return;
-  }
-  currentVisits.push({addr:'',name:'',changed:'',note:'',time:'',visitor:''});
-  renderCards();
-  scheduleSave();
-  showToast('방문 ' + currentVisits.length + ' 추가됨');
-  // 새 카드로 스크롤
-  setTimeout(()=>{
-    const wrap = $('cardsWrap');
-    wrap.scrollTop = wrap.scrollHeight;
-  }, 50);
-}
-
-function renderAddButton(){
-  const area = $('addVisitArea');
-  area.innerHTML = '';
-  const btn = document.createElement('button');
-  btn.className = 'add-card-btn';
-  btn.type = 'button';
-  if (currentVisits.length >= MAX_VISITS){
-    btn.textContent = '최대 ' + MAX_VISITS + '곳까지 입력 가능';
-    btn.disabled = true;
-  } else {
-    btn.textContent = '+ 방문 추가 (' + currentVisits.length + '/' + MAX_VISITS + ')';
-    btn.addEventListener('click', addVisit);
-  }
-  area.appendChild(btn);
-}
-
-function renderPageDots(){
-  const wrap = $('pageDots');
-  wrap.innerHTML = '';
-  currentVisits.forEach((_, i) => {
-    const dot = document.createElement('span');
-    dot.className = 'page-dot';
-    dot.dataset.index = i;
-    wrap.appendChild(dot);
-  });
-  updateActiveDot();
-}
-
-function updateActiveDot(){
-  const wrap = $('cardsWrap');
-  const dots = document.querySelectorAll('.page-dot');
-  if (!wrap || dots.length === 0) return;
-  const scrollTop = wrap.scrollTop;
-  const cardHeight = wrap.querySelector('.card')?.offsetHeight || 1;
-  const gap = 16; // margin-bottom
-  const approximateIndex = Math.round(scrollTop / (cardHeight + gap));
-  const idx = Math.max(0, Math.min(dots.length - 1, approximateIndex));
-  dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+  $('progressChip').textContent = '작성 ' + countFilled(currentVisits) + '/4';
 }
 
 function renderCards(){
@@ -680,22 +577,10 @@ function renderCards(){
   currentVisits.forEach((visit, idx) => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.dataset.index = idx;
     card.innerHTML = `
       <div class="card-head">
         <div class="stub-num">${idx+1}</div>
-        <div class="stub-label">방문 ${idx+1} / ${currentVisits.length}</div>
-        <div class="time-area">
-          <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${visit.time || '미기록'}</span>
-          <button type="button" class="time-btn" data-time-btn>재기록</button>
-          <button type="button" class="delete-btn" data-delete-btn>삭제</button>
-        </div>
-      </div>
-      <div class="card-body"></div>
-    `;
-      <div class="card-head">
-        <div class="stub-num">${idx+1}</div>
-        <div class="stub-label">방문 ${idx+1} / ${currentVisits.length}</div>
+        <div class="stub-label">방문 ${idx+1} / 4</div>
         <div class="time-area">
           <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${visit.time || '미기록'}</span>
           <button type="button" class="time-btn" data-time-btn>재기록</button>
@@ -718,22 +603,14 @@ function renderCards(){
       scheduleSave();
       showToast('방문 '+(idx+1)+' 시각 기록: '+stamped);
     });
-    const deleteBtn = card.querySelector('[data-delete-btn]');
-    deleteBtn.addEventListener('click', ()=>{
-      deleteVisit(idx);
-    });
-    const body = card.querySelector('.card-body');
-      const stamped = stampTime();
-      updateProgress();
-      scheduleSave();
-      showToast('방문 '+(idx+1)+' 시각 기록: '+stamped);
-    });
     const body = card.querySelector('.card-body');
     FIELD_META.forEach(meta => {
       const field = document.createElement('div');
       field.className = 'field' + (meta.key==='note' ? ' flag' : '');
       const val = visit[meta.key] || '';
       const fieldId = 'f-'+idx+'-'+meta.key;
+      // autocomplete="new-password" + lpignore: 모바일 브라우저가 한 카드의
+      // 담당자명을 다른 카드에도 자동으로 채워 저장하는 것(autofill 오염) 방지
       const common = 'data-field="'+meta.key+'" id="'+fieldId+'" name="'+fieldId
         +'" maxlength="'+meta.max+'" autocomplete="new-password"'
         +' data-lpignore="true" data-1p-ignore="true" data-form-type="other"'
@@ -753,6 +630,7 @@ function renderCards(){
         const cnt = field.querySelector('[data-cnt]');
         cnt.textContent = e.target.value.length+'/'+meta.max;
         cnt.classList.toggle('warn', e.target.value.length >= meta.max);
+        // 이 방문칸에 처음 뭔가 입력하는 순간 자동으로 시각 기록
         if(!currentVisits[idx].time && e.target.value.trim()){
           stampTime();
         }
@@ -763,22 +641,10 @@ function renderCards(){
     });
     wrap.appendChild(card);
   });
-
-  // 스크롤 이벤트로 인디케이터 동기화
-  wrap.removeEventListener('scroll', onCardsScroll);
-  wrap.addEventListener('scroll', onCardsScroll);
-
-  renderAddButton();
-  renderPageDots();
   updateProgress();
 }
 
-function onCardsScroll(){
-  // 디바운스 없이 바로 업데이트 (성능 충분)
-  updateActiveDot();
-}
-
-// ---------------- 자동 저장 ----------------
+// ---------------- 자동 저장 (0.6초 디바운스) ----------------
 function scheduleSave(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(()=>{
@@ -804,7 +670,7 @@ async function flushSave(){
   await saveCurrent();
 }
 
-// ---------------- 5분 자동 임시저장 ----------------
+// ---------------- 5분 자동 임시저장 (기기 내부, 조용히) ----------------
 function startBackupInterval(){
   stopBackupInterval();
   if(!autoBackupEnabled) return;
@@ -829,7 +695,7 @@ async function runAutoBackup(){
     await storage.set(BACKUP_KEY, JSON.stringify(payload));
     const lb = $('lastBackup');
     if(lb) lb.textContent = '임시저장 ' + nowHHMMSS().slice(0,5);
-  }catch(e){}
+  }catch(e){ /* 자동저장(storage)은 계속 유지되므로 조용히 무시 */ }
 }
 
 $('autoBackupToggle').addEventListener('change', (e)=>{
@@ -839,6 +705,8 @@ $('autoBackupToggle').addEventListener('change', (e)=>{
   else { stopBackupInterval(); showToast('5분 자동 임시저장 꺼짐'); }
 });
 
+// 화면을 벗어나거나(다른 앱 전환·화면 잠금) 탭이 닫히기 직전:
+// 디바운스 대기 중인 저장을 즉시 반영하고 백업도 남긴다 (데이터 유실 방지)
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ flushSave(); runAutoBackup(); }
 });
@@ -866,7 +734,7 @@ function buildReportText(dateStr, visits){
   return lines.join('\n');
 }
 
-// ---------------- HTML 리포트 ----------------
+// ---------------- HTML 리포트 (보기용 웹 페이지 + 데이터 내장) ----------------
 function buildReportHtml(dateStr, visits){
   const esc = (s)=>escapeHtml(String(s||''));
   const row = (k, val)=>'<div class="r"><div class="k">'+k+'</div><div class="v">'+esc(val||'-')+'</div></div>';
@@ -888,6 +756,7 @@ function buildReportHtml(dateStr, visits){
   const body = count === 0
     ? '<p class="empty">입력된 방문 기록이 없습니다</p>'
     : cards.join('\n');
+  // 데이터를 파일 안에 내장 → 앱의 '불러오기'로 이 파일을 열면 기록 복원 가능
   const dataJson = JSON.stringify({ date: dateStr, visits: visits }).replace(/</g, '\\u003c');
   return '<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n'
     + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
@@ -917,6 +786,7 @@ function buildReportHtml(dateStr, visits){
     + '</body>\n</html>';
 }
 
+// HTML 리포트 파일에서 내장 데이터(JSON) 추출
 function extractReportHtmlJson(text){
   const m = text.match(/<script type="application\/json" id="visit-log-data">([\s\S]*?)<\/script>/);
   if(!m) return null;
@@ -929,20 +799,18 @@ function extractReportHtmlJson(text){
 function parseReportText(text){
   const dateMatch = text.match(/방문일지\s+(\d{4}-\d{2}-\d{2})/);
   const parsedDate = dateMatch ? dateMatch[1] : null;
-  const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1);
+  const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1); // [num, body, num, body, ...]
   const visits = emptyVisits();
   for(let i=0; i<blocks.length-1; i+=2){
     const num = parseInt(blocks[i], 10);
     const body = blocks[i+1] || '';
-    if(!(num>=1 && num<=MAX_VISITS)) continue;
+    if(!(num>=1 && num<=4)) continue;
     const get = (label) => {
       const m = body.match(new RegExp(label + ':\\s*(.*)'));
       if(!m) return '';
       const v = m[1].trim();
       return v === '-' ? '' : v;
     };
-    // 필요한 경우 visits 배열 확장
-    while (visits.length < num) visits.push({addr:'',name:'',changed:'',note:'',time:'',visitor:''});
     visits[num-1] = {
       time: get('방문시각'),
       addr: get('주소').slice(0, LIMITS.addr),
@@ -955,10 +823,11 @@ function parseReportText(text){
   return { date: parsedDate, visits, hasData: hasAnyData(visits) };
 }
 
-// ---------------- 저장 (HTML 파일 공유/다운로드) ----------------
+// ---------------- 저장 (보기용 HTML 파일 공유 또는 다운로드) ----------------
 async function doShare(){
   await flushSave();
   const html = buildReportHtml(currentDate, currentVisits);
+  // 파일명에 저장 시각(시분) 포함 → 누를 때마다 새 파일, 덮어쓰기 없음
   const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.html';
   const file = new File([html], filename, {type:'text/html'});
 
@@ -969,9 +838,10 @@ async function doShare(){
         return;
       }
     }catch(e){
-      if(e && e.name === 'AbortError') return;
+      if(e && e.name === 'AbortError') return; // 사용자가 취소
     }
   }
+  // 폴백: 파일 다운로드
   downloadFile(filename, html, 'text/html');
   showToast(filename+' 저장됨');
 }
@@ -982,127 +852,11 @@ function downloadFile(filename, text, mime){
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
+  // 즉시 해제하면 일부 브라우저에서 다운로드가 취소될 수 있어 지연 해제
   setTimeout(()=>URL.revokeObjectURL(url), 4000);
 }
 
-// ---------------- v13: 링크 공유 (강화된 암호화) ----------------
-function encryptData(data){
-  const json = JSON.stringify(data);
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(json);
-  const keyBytes = encoder.encode(SHARE_KEY);
-  const len = bytes.length;
-
-  // 1. 인덱스 기반 복잡 변형 (단순 XOR 패턴 제거)
-  const scrambled = new Uint8Array(len);
-  for (let i = 0; i < len; i++){
-    const k = keyBytes[i % keyBytes.length];
-    scrambled[i] = bytes[i] ^ k ^ ((i * 31 + 17) & 0xFF) ^ ((k << (i % 3)) & 0xFF);
-  }
-
-  // 2. 바이트 순서를 인덱스 기반으로 섞기 (deterministic shuffle)
-  const shuffled = new Uint8Array(len);
-  for (let i = 0; i < len; i++){
-    const j = (i * 7 + 3) % len; // deterministic 위치
-    shuffled[i] = scrambled[j];
-  }
-
-  // 3. Base64 인코딩 (URL-safe)
-  let binary = '';
-  shuffled.forEach(b => binary += String.fromCharCode(b));
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function decryptData(base64){
-  try{
-    // URL-safe Base64 복원
-    const b64 = base64.replace(/-/g, '+').replace(/_/g, '/');
-    const pad = b64.length % 4;
-    const fixed = pad ? b64 + '='.repeat(4 - pad) : b64;
-    const binary = atob(fixed);
-    const len = binary.length;
-
-    // 1. Unshuffle
-    const shuffled = new Uint8Array(len);
-    for (let i = 0; i < len; i++) shuffled[i] = binary.charCodeAt(i);
-
-    const scrambled = new Uint8Array(len);
-    for (let i = 0; i < len; i++){
-      const j = (i * 7 + 3) % len;
-      scrambled[j] = shuffled[i];
-    }
-
-    // 2. Unscramble
-    const encoder = new TextEncoder();
-    const keyBytes = encoder.encode(SHARE_KEY);
-    const decrypted = new Uint8Array(len);
-    for (let i = 0; i < len; i++){
-      const k = keyBytes[i % keyBytes.length];
-      decrypted[i] = scrambled[i] ^ k ^ ((i * 31 + 17) & 0xFF) ^ ((k << (i % 3)) & 0xFF);
-    }
-
-    const json = new TextDecoder().decode(decrypted);
-    return JSON.parse(json);
-  }catch(e){
-    return null;
-  }
-}
-function encryptData(data){
-  const json = JSON.stringify(data);
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(json);
-  const keyBytes = encoder.encode(SHARE_KEY);
-  const xored = bytes.map((b, i) => b ^ keyBytes[i % keyBytes.length]);
-  let binary = '';
-  xored.forEach(b => binary += String.fromCharCode(b));
-  return btoa(binary);
-}
-
-function decryptData(base64){
-  try{
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const encoder = new TextEncoder();
-    const keyBytes = encoder.encode(SHARE_KEY);
-    const decrypted = bytes.map((b, i) => b ^ keyBytes[i % keyBytes.length]);
-    const json = new TextDecoder().decode(decrypted);
-    return JSON.parse(json);
-  }catch(e){
-    return null;
-  }
-}
-
-function parseUrlHash(){
-  const hash = location.hash;
-  if (!hash || !hash.startsWith('#share=')) return null;
-  const encoded = decodeURIComponent(hash.slice(7));
-  return decryptData(encoded);
-}
-
-async function doLinkShare(){
-  await flushSave();
-  const payload = { date: currentDate, visits: currentVisits };
-  const encrypted = encryptData(payload);
-  const url = location.origin + location.pathname + '#share=' + encodeURIComponent(encrypted);
-
-  try{
-    await navigator.clipboard.writeText(url);
-    showToast('공유 링크가 복사되었습니다');
-  }catch(e){
-    showToast('링크 생성됨 (직접 복사해주세요)');
-  }
-
-  if (navigator.share){
-    try{
-      await navigator.share({ title: '방문일지 공유', text: currentDate + ' 방문일지', url });
-    }catch(e){
-      // 사용자 취소
-    }
-  }
-}
-
-// ---------------- 불러오기 ----------------
+// ---------------- 불러오기 (.txt / .json 모두 지원) ----------------
 async function doImport(file){
   let text;
   try{
@@ -1118,18 +872,21 @@ async function doImport(file){
     const isJsonName = /\.json$/i.test(file.name || '');
     const isHtmlName = /\.html?$/i.test(file.name || '');
     if(isHtmlName || trimmed.indexOf('id="visit-log-data"') !== -1){
+      // v12 HTML 리포트 파일: 내장된 JSON 데이터로 복원
       const d = extractReportHtmlJson(trimmed);
       if(!d){ showToast('HTML 파일에서 기록을 찾지 못했습니다'); return; }
       visits = normalizeVisits(d.visits);
       hasData = hasAnyData(visits);
       date = (d.date && DATE_KEY_RE.test(d.date)) ? d.date : null;
     } else if(isJsonName || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
+      // JSON 저장 파일 (앱/웹의 내부 저장 형식)
       const parsed = JSON.parse(trimmed);
       visits = normalizeVisits(parsed);
       hasData = hasAnyData(visits);
       const dm = (file.name || '').match(/(\d{4}-\d{2}-\d{2})/);
       date = dm ? dm[1] : null;
     } else {
+      // 텍스트 리포트 파일
       const r = parseReportText(text);
       date = r.date; visits = r.visits; hasData = r.hasData;
     }
@@ -1169,6 +926,7 @@ async function doCopy(){
     await navigator.clipboard.writeText(text);
     showToast('클립보드에 복사했습니다');
   }catch(e){
+    // 구형 브라우저 폴백
     try{
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -1193,7 +951,10 @@ async function shiftDate(deltaDays){
   loadDate(next);
 }
 
-// ---------------- 빠른 검색 ----------------
+// ---------------- 빠른 검색 (v9) ----------------
+// 카드 1장을 하나의 그룹으로 보고, 주소/상호/변경상호/특이사항/담당자/시각 중
+// 하나라도 검색 단어를 포함하면 해당 카드 전체를 결과에 나열한다.
+// 모든 날짜의 저장 기록을 대상으로 한다.
 function escapeHtml(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -1210,9 +971,9 @@ function highlight(text, query){
 async function doSearch(){
   const q = $('searchInput').value.trim();
   if(!q){ showToast('검색어를 입력하세요'); return; }
-  await flushSave();
+  await flushSave(); // 입력 직후 저장 대기 중인 내용도 검색에 포함
   const query = q.toLowerCase();
-  const scope = $('searchScope').value;
+  const scope = $('searchScope').value; // all 또는 특정 필드 키
   const searchFields = scope === 'all'
     ? ['visitor','addr','name','changed','note','time']
     : [scope];
@@ -1221,7 +982,7 @@ async function doSearch(){
     const res = await storage.list('visit-log:');
     const keys = (res && res.keys ? res.keys : [])
       .filter(k => DATE_KEY_RE.test(k.replace('visit-log:','')))
-      .sort().reverse();
+      .sort().reverse(); // 최신 날짜부터
     for(const k of keys){
       const dateStr = k.replace('visit-log:','');
       let visits = emptyVisits();
@@ -1229,9 +990,10 @@ async function doSearch(){
         const r = await storage.get(k);
         const parsed = r && r.value ? JSON.parse(r.value) : null;
         visits = normalizeVisits(parsed);
-      }catch(e){ continue; }
+      }catch(e){ continue; } // 깨진 기록은 건너뜀
       visits.forEach((v, idx) => {
         if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
+        // 어느 항목이 일치했는지 함께 기록 (결과에 '일치 항목'으로 표시)
         const matched = [];
         searchFields.forEach((k)=>{
           if(String(v[k]||'').toLowerCase().indexOf(query) !== -1){
@@ -1239,7 +1001,7 @@ async function doSearch(){
           }
         });
         if(matched.length > 0){
-          results.push({ date: dateStr, idx: idx, visit: v, matched: matched, total: visits.length });
+          results.push({ date: dateStr, idx: idx, visit: v, matched: matched });
         }
       });
     }
@@ -1259,6 +1021,7 @@ function renderSearchResults(query, results, scopeLabel){
   }
   results.forEach((r) => {
     const v = r.visit;
+    // 결과 카드도 입력 폼과 같은 순서: 담당자명이 맨 위
     const rows = [
       ['방문담당자명', v.visitor || '-'],
       ['방문시각', v.time || '-'],
@@ -1274,7 +1037,7 @@ function renderSearchResults(query, results, scopeLabel){
       '<div class="card-head">'
       + '<div class="stub-num">' + (r.idx+1) + '</div>'
       + '<div class="result-head-main">'
-      +   '<div class="result-date">' + r.date + ' (' + weekdayKR(r.date) + ') · 방문 ' + (r.idx+1) + ' / ' + r.total + '</div>'
+      +   '<div class="result-date">' + r.date + ' (' + weekdayKR(r.date) + ') · 방문 ' + (r.idx+1) + ' / 4</div>'
       +   '<div class="result-visitor">' + highlight(v.visitor || '(담당자 없음)', query) + '</div>'
       + '</div>'
       + '</div>'
@@ -1287,6 +1050,7 @@ function renderSearchResults(query, results, scopeLabel){
           + '<div class="rv">' + highlight(row[1], query) + '</div></div>'
         ).join('')
       + '</div>';
+    // 결과 카드를 누르면 해당 날짜의 기록으로 이동
     card.addEventListener('click', async ()=>{
       await flushSave();
       loadDate(r.date);
@@ -1340,7 +1104,7 @@ async function renderHistory(){
       .filter(k => {
         if(k === SETTINGS_KEY || k === BACKUP_KEY || k === 'visit-log:dates') return false;
         const dateStr = k.replace('visit-log:','');
-        return DATE_KEY_RE.test(dateStr);
+        return DATE_KEY_RE.test(dateStr); // 깨진 키 제외
       })
       .sort().reverse();
     if(keys.length === 0){
@@ -1386,6 +1150,7 @@ function switchTab(tab){
   const tabDay = $('tabDay');
   const tabHist = $('tabHistory');
   const actionbar = $('actionbar');
+  // 탭 전환 시 검색 결과는 닫는다
   $('searchView').classList.remove('show');
   $('searchClear').style.display = 'none';
   if(tab==='day'){
@@ -1412,35 +1177,14 @@ $('tabDay').addEventListener('click', async ()=>{ await flushSave(); switchTab('
 $('tabHistory').addEventListener('click', async ()=>{ await flushSave(); switchTab('history'); });
 $('shareBtn').addEventListener('click', doShare);
 $('copyBtn').addEventListener('click', doCopy);
-$('linkShareBtn').addEventListener('click', doLinkShare);
 
-// ---------------- 초기화 ----------------
-async function init(){
-  await loadSettings();
-
-  // URL 해시에 공유 데이터가 있으면 복원
-  const shared = parseUrlHash();
-  if (shared && shared.date && Array.isArray(shared.visits)){
-    currentDate = shared.date;
-    currentVisits = normalizeVisits(shared.visits);
-    $('dateInput').value = currentDate;
-    $('weekdayLabel').textContent = weekdayKR(currentDate);
-    renderCards();
-    await saveCurrent();
-    // 해시 제거 (새로고침 시 중복 로드 방지)
-    history.replaceState(null, '', location.pathname + location.search);
-    showToast('공유받은 기록을 불러왔습니다');
-  } else {
-    loadDate(currentDate);
-  }
-
+loadSettings().then(()=>{
+  loadDate(currentDate);
   startBackupInterval();
-}
-
-init();
+});
 </script>
 <script>
-// PWA: 서비스워커 등록
+// PWA: 서비스워커 등록 (오프라인 실행 + 홈 화면 설치 지원)
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('sw.js').catch(function(){});
