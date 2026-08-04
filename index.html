@@ -12,8 +12,21 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v16
+  방문일지 (Visit Log) v18
   =========================
+  v17 → v18 개선 사항:
+  1. 카드 개수를 4개 고정 → 최대 20개까지 늘릴 수 있도록 변경:
+     - 기본은 이전처럼 4개만 보임
+     - 화면 하단 "+ 카드 추가" 버튼을 누르면 카드가 1개씩 늘어남
+       (최대 20개, 다 채우면 버튼이 "카드는 최대 20개까지..." 로 바뀌며 비활성화)
+     - 저장/불러오기/공유코드/링크 등 기존 기능은 카드 개수에 상관없이
+       그대로 동작 (4개든 20개든 실제 만든 개수만큼 저장·전송됨)
+
+  v16 → v17 개선 사항:
+  1. (디버깅) 공유코드 서버 오류 메시지에 상세 원인 코드 표시:
+     - "서버 연결에 실패했습니다 (permission-denied)" 처럼 Firebase가
+       반환한 오류 코드를 같이 보여줘서 원인 파악이 쉬워짐.
+
   v15 → v16 개선 사항:
   1. 공유 방식을 "링크" → "6자리 공유코드"로 전환 (Firebase Firestore 사용):
      - '공유코드' 버튼 → "코드 만들어 보내기" / "코드 입력해서 받기" 중 선택
@@ -272,6 +285,18 @@
     position:relative;
     box-shadow: 3px 3px 0 var(--line);
   }
+  .add-card-btn{
+    display:block; width:100%; box-sizing:border-box;
+    padding:14px; margin-bottom:24px;
+    background:var(--card); color:var(--teal-dark);
+    border:1.5px dashed var(--teal-dark);
+    font-size:14px; font-weight:700; cursor:pointer;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+  }
+  .add-card-btn:active{ background:var(--paper-2); }
+  .add-card-btn[disabled]{
+    opacity:.5; border-style:solid; color:var(--ink-soft); cursor:default;
+  }
   .card-head{
     display:flex; align-items:center; gap:10px;
     padding:10px 14px;
@@ -474,6 +499,7 @@
       <span id="lastBackup">—</span>
     </div>
     <div id="cardsWrap"></div>
+    <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
   </div>
 
   <div id="historyView" class="history">
@@ -562,6 +588,8 @@ const FIELD_LABEL = {
   note:'특이사항', visitor:'방문담당자명', time:'방문시각',
 };
 const SETTINGS_KEY = 'visit-log:settings';
+const DEFAULT_VISIT_COUNT = 4;
+const MAX_VISIT_COUNT = 20;
 const BACKUP_KEY   = 'visit-log:backup';
 const DATE_KEY_RE  = /^\d{4}-\d{2}-\d{2}$/;
 const SAVE_DEBOUNCE_MS = 600;          // 입력 후 0.6초 뒤 자동 저장
@@ -589,8 +617,9 @@ function nowHHMMSS(){
   const d = new Date();
   return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
 }
-function emptyVisits(){
-  return [0,1,2,3].map(()=>({addr:'',name:'',changed:'',note:'',time:'',visitor:''}));
+function emptyVisits(n){
+  const count = n || DEFAULT_VISIT_COUNT;
+  return Array.from({length: count}, () => ({addr:'',name:'',changed:'',note:'',time:'',visitor:''}));
 }
 const _weekdayCache = {};
 function weekdayKR(dateStr){
@@ -612,9 +641,10 @@ function normalizeVisits(parsed){
   let raw = null;
   if (Array.isArray(parsed)) raw = parsed;
   else if (parsed && Array.isArray(parsed.visits)) raw = parsed.visits;
-  if (!raw) return emptyVisits();
-  const fixed = emptyVisits();
-  for (let i = 0; i < Math.min(4, raw.length); i++){
+  if (!raw || raw.length === 0) return emptyVisits();
+  const len = Math.min(MAX_VISIT_COUNT, Math.max(DEFAULT_VISIT_COUNT, raw.length));
+  const fixed = emptyVisits(len);
+  for (let i = 0; i < Math.min(len, raw.length); i++){
     const src = raw[i];
     if (!src || typeof src !== 'object') continue;
     FIELD_META.forEach(m => {
@@ -671,8 +701,37 @@ function countFilled(visits){
 }
 
 function updateProgress(){
-  $('progressChip').textContent = '작성 ' + countFilled(currentVisits) + '/4';
+  $('progressChip').textContent = '작성 ' + countFilled(currentVisits) + '/' + currentVisits.length;
 }
+
+function updateAddCardBtn(){
+  const btn = $('addCardBtn');
+  if(currentVisits.length >= MAX_VISIT_COUNT){
+    btn.textContent = '카드는 최대 ' + MAX_VISIT_COUNT + '개까지 만들 수 있습니다';
+    btn.disabled = true;
+  }else{
+    btn.textContent = '+ 카드 추가 (' + currentVisits.length + '/' + MAX_VISIT_COUNT + ')';
+    btn.disabled = false;
+  }
+}
+
+function addVisitCard(){
+  if(currentVisits.length >= MAX_VISIT_COUNT){
+    showToast('카드는 최대 ' + MAX_VISIT_COUNT + '개까지 만들 수 있습니다');
+    return;
+  }
+  currentVisits.push({addr:'',name:'',changed:'',note:'',time:'',visitor:''});
+  renderCards();
+  saveCurrent();
+  showToast('카드가 추가되었습니다 (' + currentVisits.length + '/' + MAX_VISIT_COUNT + ')');
+  requestAnimationFrame(()=>{
+    const wrap = $('cardsWrap');
+    if(wrap.lastElementChild){
+      wrap.lastElementChild.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+  });
+}
+$('addCardBtn').addEventListener('click', addVisitCard);
 
 function renderCards(){
   const wrap = $('cardsWrap');
@@ -683,7 +742,7 @@ function renderCards(){
     card.innerHTML = `
       <div class="card-head">
         <div class="stub-num">${idx+1}</div>
-        <div class="stub-label">방문 ${idx+1} / 4</div>
+        <div class="stub-label">방문 ${idx+1} / ${currentVisits.length}</div>
         <div class="time-area">
           <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${visit.time || '미기록'}</span>
           <button type="button" class="time-btn" data-time-btn>재기록</button>
@@ -745,6 +804,7 @@ function renderCards(){
     wrap.appendChild(card);
   });
   updateProgress();
+  updateAddCardBtn();
 }
 
 // ---------------- 자동 저장 (0.6초 디바운스) ----------------
@@ -903,11 +963,17 @@ function parseReportText(text){
   const dateMatch = text.match(/방문일지\s+(\d{4}-\d{2}-\d{2})/);
   const parsedDate = dateMatch ? dateMatch[1] : null;
   const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1); // [num, body, num, body, ...]
-  const visits = emptyVisits();
+  let maxNum = DEFAULT_VISIT_COUNT;
+  for(let i=0; i<blocks.length-1; i+=2){
+    const n = parseInt(blocks[i], 10);
+    if(n > maxNum) maxNum = n;
+  }
+  maxNum = Math.min(MAX_VISIT_COUNT, maxNum);
+  const visits = emptyVisits(maxNum);
   for(let i=0; i<blocks.length-1; i+=2){
     const num = parseInt(blocks[i], 10);
     const body = blocks[i+1] || '';
-    if(!(num>=1 && num<=4)) continue;
+    if(!(num>=1 && num<=maxNum)) continue;
     const get = (label) => {
       const m = body.match(new RegExp(label + ':\\s*(.*)'));
       if(!m) return '';
@@ -1258,7 +1324,8 @@ async function doShareCode(){
     await showCodeResultModal(code);
   }catch(e){
     console.error(e);
-    showToast('서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요');
+    const detail = (e && (e.code || e.message)) ? (' ('+(e.code || e.message)+')') : '';
+    showToast('서버 연결에 실패했습니다' + detail);
   }
 }
 
@@ -1280,7 +1347,9 @@ async function doImportCode(){
   try{
     snap = await fbDb.collection('shared_routes').doc(codeTrim).get();
   }catch(e){
-    showToast('서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요');
+    console.error(e);
+    const detail = (e && (e.code || e.message)) ? (' ('+(e.code || e.message)+')') : '';
+    showToast('서버 연결에 실패했습니다' + detail);
     return;
   }
   if(!snap.exists){
