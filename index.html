@@ -874,11 +874,13 @@ function launchAppUrl(appUrl, storeUrl){
 }
 
 async function openInTmap(address, btnEl){
-  const addr = (address || '').trim();
-  if(!addr){
+  const raw = (address || '').trim();
+  if(!raw){
     showToast('방문주소를 먼저 입력해주세요');
     return;
   }
+  // '(' 앞부분만 T맵으로 전달 (예: "의림대로 41(영천동)" → "의림대로 41")
+  const addr = raw.split('(')[0].trim() || raw;
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const storeUrl = isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS;
   const enc = encodeURIComponent(addr);
