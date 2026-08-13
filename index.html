@@ -1088,27 +1088,16 @@ function parseReportText(text){
   return { date: parsedDate, visits, hasData: hasAnyData(visits) };
 }
 
-// ---------------- 저장 (보기용 HTML 파일 공유 또는 다운로드) ----------------
+// ---------------- 저장 (다운로드 폴더에 바로 저장) ----------------
 async function doShare(){
   await flushSave();
   const html = buildReportHtml(currentDate, currentVisits);
   // 파일명에 저장 시각(시분) 포함 → 누를 때마다 새 파일, 덮어쓰기 없음
   const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.html';
-  const file = new File([html], filename, {type:'text/html'});
-
-  if(navigator.share){
-    try{
-      if(navigator.canShare && navigator.canShare({files:[file]})){
-        await navigator.share({ files:[file], title:filename, text:'방문일지 '+currentDate });
-        return;
-      }
-    }catch(e){
-      if(e && e.name === 'AbortError') return; // 사용자가 취소
-    }
-  }
-  // 폴백: 파일 다운로드
+  // 공유 시트(1개 항목 선택 → 파일관리자에서 수동 저장)를 거치지 않고
+  // 바로 다운로드 폴더에 저장되도록 다운로드 방식만 사용.
   downloadFile(filename, html, 'text/html');
-  showToast(filename+' 저장됨');
+  showToast(filename+' 다운로드 폴더에 저장됨');
 }
 
 function downloadFile(filename, text, mime){
