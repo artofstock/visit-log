@@ -354,6 +354,16 @@
   .field textarea{ min-height:52px; line-height:1.4; }
   .field input:focus, .field textarea:focus{ outline:none; border-color:var(--teal); }
   .field.flag input, .field.flag textarea{ border-color:#DCC9A8; background:#FBF6EC; }
+  .addr-row{ display:flex; gap:6px; }
+  .addr-row input{ flex:1; min-width:0; }
+  .tmap-btn{
+    flex-shrink:0; display:flex; align-items:center; gap:4px;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-size:12.5px; font-weight:700;
+    border:1.5px solid var(--teal-dark); background:#fff; color:var(--teal-dark);
+    padding:0 11px; cursor:pointer; white-space:nowrap;
+  }
+  .tmap-btn:active{ background:var(--teal-dark); color:#fff; }
+  .tmap-btn.loading{ opacity:.55; pointer-events:none; }
 
   .save-row{
     display:flex; align-items:center; justify-content:space-between;
@@ -790,9 +800,21 @@ function renderCards(){
       if(meta.type === 'textarea'){
         field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
           + '<textarea '+common+'></textarea>';
+      } else if(meta.key === 'addr'){
+        field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
+          + '<div class="addr-row">'
+          +   '<input '+common+' type="text" enterkeyhint="next">'
+          +   '<button type="button" class="tmap-btn" data-tmap-btn title="T맵으로 길찾기">T맵 길찾기</button>'
+          + '</div>';
       } else {
         field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
           + '<input '+common+' type="text" enterkeyhint="next">';
+      }
+      if(meta.key === 'addr'){
+        const tmapBtn = field.querySelector('[data-tmap-btn]');
+        tmapBtn.addEventListener('click', ()=>{
+          openInTmap(currentVisits[idx].addr, tmapBtn);
+        });
       }
       const inputEl = field.querySelector('[data-field]');
       inputEl.value = val;
@@ -816,6 +838,67 @@ function renderCards(){
   });
   updateProgress();
   updateAddCardBtn();
+}
+
+// ---------------- T맵 길찾기 연동 ----------------
+// 방문주소 → 좌표 변환(지오코딩) 후 T맵 앱을 목적지 경로안내 화면으로 바로 실행.
+// 좌표를 못 찾으면 T맵 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
+const TMAP_STORE_IOS = 'https://apps.apple.com/kr/app/id431589174';
+const TMAP_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
+
+async function geocodeAddressKR(addr){
+  const q = encodeURIComponent(addr + ', 대한민국');
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&accept-language=ko&q=' + q;
+  const res = await fetch(url);
+  if(!res.ok) return null;
+  const list = await res.json();
+  if(!Array.isArray(list) || !list.length) return null;
+  const { lat, lon } = list[0];
+  if(!lat || !lon) return null;
+  return { lat, lon };
+}
+
+// URL로 이동시키되, 앱이 실제로 열려 화면이 전환됐는지(visibilitychange)를 감지해서
+// 안 열렸을 때만(=T맵 미설치 등) 스토어로 안내.
+function launchAppUrl(appUrl, storeUrl){
+  let switched = false;
+  const onHide = () => { switched = true; };
+  document.addEventListener('visibilitychange', onHide, { once:true });
+  window.location.href = appUrl;
+  setTimeout(() => {
+    document.removeEventListener('visibilitychange', onHide);
+    if(!switched && storeUrl){
+      window.location.href = storeUrl;
+    }
+  }, 1500);
+}
+
+async function openInTmap(address, btnEl){
+  const addr = (address || '').trim();
+  if(!addr){
+    showToast('방문주소를 먼저 입력해주세요');
+    return;
+  }
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const storeUrl = isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS;
+  const enc = encodeURIComponent(addr);
+  if(btnEl) btnEl.classList.add('loading');
+  try{
+    const geo = await geocodeAddressKR(addr);
+    if(geo){
+      const tmapUrl = 'tmap://route?rGoName='+enc+'&rGoX='+geo.lon+'&rGoY='+geo.lat
+        + '&goalname='+enc+'&goalx='+geo.lon+'&goaly='+geo.lat;
+      launchAppUrl(tmapUrl, storeUrl);
+    } else {
+      showToast('정확한 좌표를 못 찾아 T맵 검색으로 엽니다');
+      launchAppUrl('tmap://search?name='+enc, storeUrl);
+    }
+  }catch(err){
+    showToast('주소 조회 실패 — T맵 검색으로 엽니다');
+    launchAppUrl('tmap://search?name='+enc, storeUrl);
+  }finally{
+    if(btnEl) btnEl.classList.remove('loading');
+  }
 }
 
 // ---------------- 자동 저장 (0.6초 디바운스) ----------------
