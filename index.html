@@ -364,6 +364,14 @@
   }
   .tmap-btn:active{ background:var(--teal-dark); color:#fff; }
   .tmap-btn.loading{ opacity:.55; pointer-events:none; }
+  .nav-pref-row{ align-items:center; }
+  .nav-pref-toggle{ display:flex; border:1.3px solid var(--line); overflow:hidden; }
+  .nav-pref-btn{
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-size:12.5px; font-weight:700;
+    border:none; background:#fff; color:var(--ink-soft); padding:5px 12px; cursor:pointer;
+  }
+  .nav-pref-btn + .nav-pref-btn{ border-left:1.3px solid var(--line); }
+  .nav-pref-btn.active{ background:var(--teal-dark); color:#fff; }
 
   .save-row{
     display:flex; align-items:center; justify-content:space-between;
@@ -516,6 +524,13 @@
         <span>5분마다 자동 임시저장 (기기 내부)</span>
       </label>
       <span id="lastBackup">—</span>
+    </div>
+    <div class="save-row nav-pref-row">
+      <span>내비게이션 앱</span>
+      <div class="nav-pref-toggle" id="navPrefToggle">
+        <button type="button" class="nav-pref-btn" data-nav="tmap">T맵</button>
+        <button type="button" class="nav-pref-btn" data-nav="naver">네이버맵</button>
+      </div>
     </div>
     <div id="cardsWrap"></div>
     <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
@@ -804,16 +819,16 @@ function renderCards(){
         field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
           + '<div class="addr-row">'
           +   '<input '+common+' type="text" enterkeyhint="next">'
-          +   '<button type="button" class="tmap-btn" data-tmap-btn title="T맵으로 길찾기">T맵 길찾기</button>'
+          +   '<button type="button" class="tmap-btn" data-nav-btn title="선택한 내비 앱으로 길찾기">'+navAppLabel()+' 길찾기</button>'
           + '</div>';
       } else {
         field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
           + '<input '+common+' type="text" enterkeyhint="next">';
       }
       if(meta.key === 'addr'){
-        const tmapBtn = field.querySelector('[data-tmap-btn]');
-        tmapBtn.addEventListener('click', ()=>{
-          openInTmap(currentVisits[idx].addr, tmapBtn);
+        const navBtn = field.querySelector('[data-nav-btn]');
+        navBtn.addEventListener('click', ()=>{
+          openInNavApp(currentVisits[idx].addr, navBtn);
         });
       }
       const inputEl = field.querySelector('[data-field]');
@@ -840,11 +855,34 @@ function renderCards(){
   updateAddCardBtn();
 }
 
-// ---------------- T맵 길찾기 연동 ----------------
-// 방문주소 → 좌표 변환(지오코딩) 후 T맵 앱을 목적지 경로안내 화면으로 바로 실행.
-// 좌표를 못 찾으면 T맵 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
+// ---------------- 내비 앱 연동 (T맵 / 네이버맵 선택) ----------------
+// 방문주소 → 좌표 변환(지오코딩) 후 사용자가 선택한 내비 앱을 목적지 경로안내 화면으로 바로 실행.
+// 좌표를 못 찾으면 해당 앱의 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
 const TMAP_STORE_IOS = 'https://apps.apple.com/kr/app/id431589174';
 const TMAP_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
+const NAVER_STORE_IOS = 'https://apps.apple.com/kr/app/id311867728';
+const NAVER_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.nhn.android.nmap';
+const NAVER_APPNAME = 'com.atlaslab.visitlog'; // 네이버맵 URL Scheme 필수 식별자(임의 문자열 가능)
+const NAV_APP_KEY = 'visitlog_navApp';
+
+function getNavApp(){
+  const v = localStorage.getItem(NAV_APP_KEY);
+  return v === 'naver' ? 'naver' : 'tmap';
+}
+function setNavApp(app){
+  localStorage.setItem(NAV_APP_KEY, app === 'naver' ? 'naver' : 'tmap');
+  updateNavPrefUI();
+  renderCards(); // 카드의 길찾기 버튼 라벨을 새 선택값으로 갱신
+}
+function updateNavPrefUI(){
+  const cur = getNavApp();
+  document.querySelectorAll('.nav-pref-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.nav === cur);
+  });
+}
+function navAppLabel(){
+  return getNavApp() === 'naver' ? '네이버맵' : 'T맵';
+}
 
 async function geocodeAddressKR(addr){
   const q = encodeURIComponent(addr + ', 대한민국');
@@ -859,7 +897,7 @@ async function geocodeAddressKR(addr){
 }
 
 // URL로 이동시키되, 앱이 실제로 열려 화면이 전환됐는지(visibilitychange)를 감지해서
-// 안 열렸을 때만(=T맵 미설치 등) 스토어로 안내.
+// 안 열렸을 때만(=미설치 등) 스토어로 안내.
 function launchAppUrl(appUrl, storeUrl){
   let switched = false;
   const onHide = () => { switched = true; };
@@ -873,35 +911,52 @@ function launchAppUrl(appUrl, storeUrl){
   }, 1500);
 }
 
-async function openInTmap(address, btnEl){
+async function openInNavApp(address, btnEl){
   const raw = (address || '').trim();
   if(!raw){
     showToast('방문주소를 먼저 입력해주세요');
     return;
   }
-  // '(' 앞부분만 T맵으로 전달 (예: "의림대로 41(영천동)" → "의림대로 41")
+  // '(' 앞부분만 내비 앱으로 전달 (예: "의림대로 41(영천동)" → "의림대로 41")
   const addr = raw.split('(')[0].trim() || raw;
+  const app = getNavApp();
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS;
+  const storeUrl = app === 'naver' ? (isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS) : (isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS);
   const enc = encodeURIComponent(addr);
   if(btnEl) btnEl.classList.add('loading');
   try{
     const geo = await geocodeAddressKR(addr);
     if(geo){
-      const tmapUrl = 'tmap://route?rGoName='+enc+'&rGoX='+geo.lon+'&rGoY='+geo.lat
-        + '&goalname='+enc+'&goalx='+geo.lon+'&goaly='+geo.lat;
-      launchAppUrl(tmapUrl, storeUrl);
+      let navUrl;
+      if(app === 'naver'){
+        navUrl = 'nmap://navigation?dlat='+geo.lat+'&dlng='+geo.lon+'&dname='+enc+'&appname='+NAVER_APPNAME;
+      }else{
+        navUrl = 'tmap://route?rGoName='+enc+'&rGoX='+geo.lon+'&rGoY='+geo.lat
+          + '&goalname='+enc+'&goalx='+geo.lon+'&goaly='+geo.lat;
+      }
+      launchAppUrl(navUrl, storeUrl);
     } else {
-      showToast('정확한 좌표를 못 찾아 T맵 검색으로 엽니다');
-      launchAppUrl('tmap://search?name='+enc, storeUrl);
+      showToast('정확한 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
+      const searchUrl = app === 'naver'
+        ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
+        : 'tmap://search?name='+enc;
+      launchAppUrl(searchUrl, storeUrl);
     }
   }catch(err){
-    showToast('주소 조회 실패 — T맵 검색으로 엽니다');
-    launchAppUrl('tmap://search?name='+enc, storeUrl);
+    showToast('주소 조회 실패 — '+navAppLabel()+' 검색으로 엽니다');
+    const searchUrl = app === 'naver'
+      ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
+      : 'tmap://search?name='+enc;
+    launchAppUrl(searchUrl, storeUrl);
   }finally{
     if(btnEl) btnEl.classList.remove('loading');
   }
 }
+
+document.querySelectorAll('.nav-pref-btn').forEach(btn => {
+  btn.addEventListener('click', () => setNavApp(btn.dataset.nav));
+});
+updateNavPrefUI();
 
 // ---------------- 자동 저장 (0.6초 디바운스) ----------------
 function scheduleSave(){

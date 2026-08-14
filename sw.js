@@ -1,5 +1,5 @@
 /* 방문일지 PWA 서비스워커 — 오프라인에서도 앱이 열리도록 캐시 */
-const CACHE = 'visit-log-v22';
+const CACHE = 'visit-log-v23';
 const ASSETS = [
   './',
   './index.html',
