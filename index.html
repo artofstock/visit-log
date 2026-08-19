@@ -847,7 +847,7 @@ function renderCards(){
     const startConnector = document.createElement('div');
     startConnector.className = 'segment-connector';
     startConnector.innerHTML = `<button type="button" class="segment-btn office-btn" data-seg-btn>
-      <span class="arrow">🏢</span> 제천세무서 → 1번 구간 경로 검색
+      <span class="arrow">🏢</span> 제천세무서 → 1번 구간 경로 (네이버맵)
     </button>`;
     const startBtn = startConnector.querySelector('[data-seg-btn]');
     startBtn.addEventListener('click', () => openSegmentRoute(officePoint(), visitPoint(0), startBtn));
@@ -954,7 +954,7 @@ function renderCards(){
       const connector = document.createElement('div');
       connector.className = 'segment-connector';
       connector.innerHTML = `<button type="button" class="segment-btn" data-seg-btn>
-        <span class="arrow">↓</span> ${idx+1}번 → ${idx+2}번 구간 경로 검색
+        <span class="arrow">↓</span> ${idx+1}번 → ${idx+2}번 구간 경로 (네이버맵)
       </button>`;
       const segBtn = connector.querySelector('[data-seg-btn]');
       segBtn.addEventListener('click', () => openSegmentRoute(visitPoint(idx), visitPoint(idx+1), segBtn));
@@ -1085,14 +1085,17 @@ document.querySelectorAll('.nav-pref-btn').forEach(btn => {
 updateNavPrefUI();
 
 // ---------------- 구간 경로 (제천세무서 → 1번 → 2번 → ... → N번 → 제천세무서) ----------------
-// 네이버맵: 출발지·도착지 좌표를 모두 지정한 정식 경로(nmap://route/car)를 엽니다.
-// 티맵: 앱의 URL scheme이 출발지 좌표 지정을 공식 지원하지 않아, 도착지만 지정됩니다
-//       (앱을 열면 현재 위치가 출발지로 자동 사용돼요 — 실제로 그 자리에서 다음 방문지로
-//        출발할 때 누르면 결과적으로 똑같이 동작합니다).
-// fromPoint/toPoint: { label: 버튼/토스트에 쓸 표시명, name: 지도앱에 넘길 이름, addr: 지오코딩할 주소 }
-function officePoint(){ return { label: '제천세무서', name: OFFICE_NAME, addr: OFFICE_ADDR }; }
+// 중요: 티맵 URL scheme은 "출발지 좌표"를 지정하는 기능을 공식적으로 지원하지 않아서,
+// 티맵으로 열면 항상 현재 위치가 출발지로 쓰입니다 (예: 집에서 누르면 집이 출발지가 됨).
+// 구간 경로는 정확히 두 지점(예: 1번→2번) 사이 경로가 필요하므로, 카드 안의 개별
+// "길찾기" 버튼과 달리 사용자가 선택한 내비 앱과 무관하게 항상 네이버맵으로 엽니다.
+// fromPoint/toPoint: { label: 버튼/토스트에 쓸 표시명, addr: 지오코딩 + 지도앱에 넘길 주소 }
+// 주의: 지도앱에 넘기는 이름(sname/dname)은 반드시 '주소'로만 넘깁니다.
+// 방문상호(회사명)를 넘기면, 폐업 등으로 그 이름이 지도 앱의 자체 검색/POI 매칭에 걸려
+// 정확한 좌표 대신 엉뚱한 위치로 보정되는 경우가 있기 때문입니다.
+function officePoint(){ return { label: '제천세무서', addr: OFFICE_ADDR }; }
 function visitPoint(idx){
-  return { label: (idx+1)+'번', name: (currentVisits[idx].name || (idx+1)+'번 방문지'), addr: (currentVisits[idx].addr || '').trim() };
+  return { label: (idx+1)+'번', addr: (currentVisits[idx].addr || '').trim() };
 }
 
 async function openSegmentRoute(fromPoint, toPoint, btnEl){
@@ -1104,41 +1107,34 @@ async function openSegmentRoute(fromPoint, toPoint, btnEl){
   }
   const fromAddr = fromRaw.split('(')[0].trim() || fromRaw;
   const toAddr = toRaw.split('(')[0].trim() || toRaw;
-  const app = getNavApp();
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = app === 'naver' ? (isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS) : (isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS);
+  const storeUrl = isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
 
   if(btnEl) btnEl.classList.add('loading');
   try{
     const [fromGeo, toGeo] = await Promise.all([geocodeAddressKR(fromAddr), geocodeAddressKR(toAddr)]);
 
     if(!toGeo){
-      showToast(toPoint.label+' 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
+      showToast(toPoint.label+' 좌표를 못 찾아 네이버맵 검색으로 엽니다');
       const enc = encodeURIComponent(toAddr);
-      const searchUrl = app === 'naver' ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME : 'tmap://search?name='+enc;
-      launchAppUrl(searchUrl, storeUrl);
+      launchAppUrl('nmap://search?query='+enc+'&appname='+NAVER_APPNAME, storeUrl);
       return;
     }
-
-    if(app === 'naver'){
-      const dEnc = encodeURIComponent(toPoint.name || toAddr);
-      let navUrl;
-      if(fromGeo){
-        const sEnc = encodeURIComponent(fromPoint.name || fromAddr);
-        navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
-          + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-      }else{
-        navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-        showToast(fromPoint.label+' 좌표를 못 찾아 도착지만 안내합니다');
-      }
-      launchAppUrl(navUrl, storeUrl);
-    }else{
-      const dEnc = encodeURIComponent(toPoint.name || toAddr);
-      const navUrl = 'tmap://route?rGoName='+dEnc+'&rGoX='+toGeo.lon+'&rGoY='+toGeo.lat
-        + '&goalname='+dEnc+'&goalx='+toGeo.lon+'&goaly='+toGeo.lat;
-      showToast('티맵은 도착지('+toPoint.label+')까지만 안내돼요 · 현재 위치가 출발지로 쓰여요');
-      launchAppUrl(navUrl, storeUrl);
+    if(!fromGeo){
+      showToast(fromPoint.label+' 좌표를 못 찾아 도착지만 안내합니다');
     }
+
+    // sname/dname은 항상 주소 텍스트를 그대로 사용 (상호명 사용 금지 — 폐업 상호 등으로 오검색 방지)
+    const dEnc = encodeURIComponent(toAddr);
+    let navUrl;
+    if(fromGeo){
+      const sEnc = encodeURIComponent(fromAddr);
+      navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
+        + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+    }else{
+      navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+    }
+    launchAppUrl(navUrl, storeUrl);
   }catch(err){
     showToast('주소 조회 중 오류가 발생했어요');
   }finally{
