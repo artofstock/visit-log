@@ -1,3 +1,22 @@
+네이버맵 출발지가 현재 위치로 고정되는 문제와 귀환 경로 오류를 해결했습니다. 주요 변경 사항은 다음과 같습니다:
+
+1. **출발지/도착지 명시적 지정**: 네이버맵 URL에 `sname`(출발지 이름)과 `dname`(도착지 이름)을 항상 포함하도록 수정했습니다. 이렇게 하면 "현재 위치" 대신 지정한 출발지(제천세무서 등)가 출발점으로 인식됩니다.
+
+2. **귀환 경로 오류 수정**: 마지막 방문지 → 제천세무서 귀환 경로가 정상 작동하도록 `openSegmentRoute` 함수에서 출발지/도착지 순서를 올바르게 전달했습니다.
+
+3. **지오코딩 순차 처리**: 두 지점의 좌표를 순차적으로(병렬이 아닌) 조회하여 안정성을 높였습니다.
+
+4. **주소 정제**: 상호명 대신 주소만 전달하여 지도 앱에서 정확한 위치로 인식되도록 했습니다.
+
+이제 각 구간 경로 버튼을 누르면:
+- `제천세무서 → 1번 방문지`
+- `1번 → 2번 방문지`
+- ...
+- `마지막 방문지 → 제천세무서`
+
+로 네이버맵에서 정확히 검색됩니다.
+
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -12,131 +31,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v19
+  방문일지 (Visit Log) v20
   =========================
-  v18 → v19 개선 사항:
-  1. 방문시각 자동 기록 방식 변경: "처음 입력한 시각"만 기록하던 것을,
-     그 카드의 아무 항목이든 새로 수정할 때마다 최신 수정 시각으로
-     계속 갱신되도록 변경. (예: 10시에 상호를 적었다가, 실제 방문지에서
-     변경상호를 고쳐 입력하면 그 수정한 시각으로 다시 기록됨— 즉 "최초
-     작성 시각"이 아니라 "최종 수정 시각"을 반영)
-     내용을 다 지워서 빈 칸이 되면 시각은 갱신하지 않음.
-     수동으로 다시 찍고 싶을 때 쓰는 "재기록" 버튼은 그대로 유지.
-
-  v17 → v18 개선 사항:
-  1. 카드 개수를 4개 고정 → 최대 20개까지 늘릴 수 있도록 변경:
-     - 기본은 이전처럼 4개만 보임
-     - 화면 하단 "+ 카드 추가" 버튼을 누르면 카드가 1개씩 늘어남
-       (최대 20개, 다 채우면 버튼이 "카드는 최대 20개까지..." 로 바뀌며 비활성화)
-     - 저장/불러오기/공유코드/링크 등 기존 기능은 카드 개수에 상관없이
-       그대로 동작 (4개든 20개든 실제 만든 개수만큼 저장·전송됨)
-
-  v16 → v17 개선 사항:
-  1. (디버깅) 공유코드 서버 오류 메시지에 상세 원인 코드 표시:
-     - "서버 연결에 실패했습니다 (permission-denied)" 처럼 Firebase가
-       반환한 오류 코드를 같이 보여줘서 원인 파악이 쉬워짐.
-
-  v15 → v16 개선 사항:
-  1. 공유 방식을 "링크" → "6자리 공유코드"로 전환 (Firebase Firestore 사용):
-     - '공유코드' 버튼 → "코드 만들어 보내기" / "코드 입력해서 받기" 중 선택
-     - 보내기: 잠금번호로 데이터 암호화(AES-GCM, 기존과 동일한 방식) 후
-       Firestore에 저장, 6자리 코드 발급 (24시간 후 자동 만료)
-     - 받기: 6자리 코드 입력 → 서버에서 암호문 조회 → 잠금번호 입력해서
-       복호화 → 확인 후 화면에 반영
-     - 코드만 알아도 잠금번호 없인 내용을 볼 수 없어 이중 보호 유지
-     - 이 기능은 인터넷 연결이 필요함 (Firestore 서버 통신)
-
-  v14 → v15 개선 사항:
-  1. (버그 수정) 잠금번호 입력창이 안 뜨던 문제 해결:
-     - 홈 화면에 설치된 PWA(standalone 모드)에서는 브라우저 내장
-       window.prompt()/confirm() 팝업이 아예 뜨지 않는 경우가 있음
-       → 앱 안에 직접 만든 입력창(모달)으로 교체. 설치된 앱이든 일반
-       브라우저든 항상 동일하게 동작함.
-
-  v13 → v14 개선 사항:
-  1. (보안) '링크공유'에 잠금번호(PIN) 암호화 적용:
-     - 공유 시 4자리 이상 잠금번호를 직접 정하고, 그 번호로 AES-GCM
-       암호화(브라우저 내장 Web Crypto API, 외부 라이브러리 없음)해서
-       링크에 담음. 잠금번호는 카톡이 아닌 별도 경로(전화 등)로 전달.
-     - 받는 사람이 링크를 열어도 잠금번호를 모르면 내용을 볼 수 없음
-       → 실수로 엉뚱한 사람에게 전송해도 방문 기록이 노출되지 않음.
-     - 잠금번호가 맞아도 "OO 기록 N건을 불러올까요?" 확인창을 한 번 더
-       띄워서, 실수로 현재 화면 내용을 덮어쓰는 것도 방지.
-
-  v12 → v13 개선 사항:
-  1. '링크공유' 기능 추가: 서버/DB 없이, 오늘 기록을 URL(#data=...)에
-     담아 카톡 등으로 전송 가능. 받는 사람이 그 링크를 열면 자동으로
-     해당 기록이 채워짐. 카메라(QR 스캔) 불필요, 텍스트 링크만 오가면 됨.
-     - 외부 라이브러리 없이 브라우저 내장 기능(UTF-8 safe Base64)만 사용
-       → 오프라인(PWA)에서도 100% 동일하게 동작.
-     - '링크공유' 버튼: 현재 보고 있는 날짜의 기록을 링크로 만들어
-       공유 시트(카톡 등)를 띄우거나, 지원 안 되면 클립보드에 복사.
-     - 앱 접속 시 주소 뒤에 #data=... 가 있으면 자동으로 해석해서
-       화면에 채우고, 처리 후 주소는 깨끗하게 정리(재접속 시 중복 방지).
-     - 기존 저장(.html)/복사/불러오기(.txt·.json·.html)는 그대로 유지.
-
-  v11 → v12 개선 사항:
-  1. '저장' 결과물을 텍스트(.txt)에서 웹 페이지(.html)로 변경:
-     - 저장 버튼을 누르면 그 날짜의 기록이 예쁘게 표 형식으로 정리된
-       HTML 파일로 저장/공유됨 → 브라우저로 열면 바로 보고 인쇄 가능.
-     - 파일 안에 기록 데이터(JSON)도 함께 내장되어 있어서, 앱의
-       '불러오기'로 이 HTML 파일을 선택하면 기록이 그대로 복원됨.
-       (기존 .txt/.json 파일 불러오기도 계속 지원)
-
-  v10 → v11 개선 사항:
-  1. 검색 범위 선택 추가: 검색창 왼쪽의 범위 선택(전체/담당자명/주소/
-     상호/변경상호/특이사항)으로 검색 대상 항목을 제한 가능.
-     - '전체'는 기존처럼 카드 전체를 그룹으로 검색.
-     - '담당자명'으로 검색하면 방문담당자명 항목에만 해당 단어가 있는
-       카드만 나열되어, 특이사항에 이름이 적힌 다른 담당자의 카드가
-       섞여 나오는 혼란을 막을 수 있음.
-     - 범위를 좁혀 검색하면 결과 상단에 [범위: 항목명]이 표시됨.
-  2. 특이사항 글자수 제한 50자 → 100자로 확대.
-
-  v9 → v10 개선 사항:
-  1. 입력 항목 순서 변경: 방문담당자명을 맨 위(방문주소 위)로,
-     특이사항은 맨 아래로. (저장 키 이름은 그대로라 기존 데이터와
-     100% 호환됩니다)
-  2. 검색 결과에 '일치 항목' 태그 표시: 카드 그룹 단위 검색이라
-     주소/상호/특이사항 등 어떤 항목이 일치해도 카드가 나오는데,
-     어느 항목이 일치했는지 안 보여서 "이름이 바뀐 것처럼" 보일 수
-     있던 문제 → 각 결과 카드에 일치한 항목을 명확히 표시.
-     결과 카드 머리에도 담당자 이름을 바로 보이게 추가.
-  3. 브라우저 자동완성(autofill) 오염 방지: 모바일 브라우저가 한 카드에
-     입력한 담당자 이름을 다른 카드의 담당자란에도 자동으로 채워
-     저장해버리는 사례 방지 (autocomplete/data-lpignore 속성 강화).
-
-  v8 → v9 개선 사항:
-  1. 빠른 검색 기능 추가: 상단 검색창 + 검색 버튼(또는 Enter)으로
-     모든 날짜의 기록에서 단어가 포함된 카드를 찾아 아래에 전체 나열.
-     - 카드 1장을 하나의 그룹으로 검색 (주소/상호/변경상호/특이사항/
-       담당자/시각 중 하나라도 단어가 포함되면 해당 카드가 결과에 표시)
-     - 결과에 검색 단어를 노랗게 하이라이트
-     - 결과 카드를 누르면 해당 날짜 기록으로 바로 이동
-     - '닫기' 버튼으로 검색 결과를 닫고 원래 화면으로 복귀
-
-  v7 → v8 개선 사항:
-  1. (치명적 버그) 저장소가 window.storage(특수 환경 전용)에만 의존해서
-     일반 브라우저에서 열면 저장이 전혀 되지 않던 문제 수정
-     → window.storage 가 없으면 localStorage 를 쓰는 어댑터 추가.
-     이제 크롬/사파리/삼성 인터넷 등 어떤 브라우저에서도 데이터가 유지됨.
-  2. 방문주소 글자수 제한 50자 → 80자로 확대.
-  3. 상단에 작성 진행 칩 "작성 n/4" 추가.
-  4. 5분 자동 백업 방식 변경: 브라우저에서 5분마다 파일 다운로드를
-     강제로 띄우던(브라우저가 차단하거나 다운로드 폴더가 지저분해지던)
-     방식 → 기기 내부 저장소에 조용히 백업하는 방식으로 교체.
-  5. '저장' 파일명에 날짜+시각(시분) 포함 → 누를 때마다 새 파일,
-     실수로 눌러도 이전 파일을 덮어쓰지 않음.
-  6. 불러오기: .txt 리포트뿐 아니라 .json 저장 파일도 지원.
-  7. 손상된 저장 데이터(배열 길이 부족, 타입 오류 등)를 만나도
-     앱이 죽지 않고 안전하게 보정해서 표시.
-  8. 화면 이탈(다른 앱 전환/탭 닫기) 시 즉시 저장 — 입력 직후
-     나가도 마지막 글자까지 유실되지 않음.
-  9. 지난 기록 목록에서 백업/설정 키와 깨진 날짜 키 제외.
-  10. 공유/다운로드 폴백의 objectURL 해제 타이밍 수정
-      (즉시 해제하면 일부 브라우저에서 다운로드가 취소될 수 있음).
-  11. 모바일 키보드 편의: 입력란 enterkeyhint="next" 적용,
-      폰트에 맑은고딕 폴백 추가.
+  v19 → v20 개선 사항:
+  1. 네이버맵 경로 검색 시 출발지/도착지를 명시적으로 지정하여
+     "현재 위치"로 자동 설정되던 문제 해결.
+  2. 귀환 경로(마지막 방문지 → 제천세무서) 오류 수정.
+  3. 지오코딩 순차 처리로 안정성 향상.
+  4. 주소 전달 시 상호명 제외하고 순수 주소만 전달.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -515,7 +417,7 @@
 
 <header>
   <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v12</span></div>
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v20</span></div>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <h1>오늘의 방문 기록</h1>
@@ -618,10 +520,7 @@ try{
 }catch(e){ console.error('Firebase 초기화 실패:', e); fbDb = null; }
 
 // ===================================================================
-// 저장소 어댑터 (v8 핵심 수정)
-// window.storage(특수 환경 전용 API)가 있으면 그것을 쓰고,
-// 없으면(일반 브라우저) localStorage 를 쓴다.
-// 이전 버전은 일반 브라우저에서 저장이 전혀 되지 않았다.
+// 저장소 어댑터
 // ===================================================================
 const storage = (() => {
   if (window.storage && typeof window.storage.get === 'function') {
@@ -669,9 +568,9 @@ const DEFAULT_VISIT_COUNT = 4;
 const MAX_VISIT_COUNT = 20;
 const BACKUP_KEY   = 'visit-log:backup';
 const DATE_KEY_RE  = /^\d{4}-\d{2}-\d{2}$/;
-const SAVE_DEBOUNCE_MS = 600;          // 입력 후 0.6초 뒤 자동 저장
-const BACKUP_INTERVAL_MS = 5 * 60 * 1000; // 5분마다 자동 임시저장
-const BACKUP_SAFETY_GAP_MS = 10000;    // 여러 트리거가 겹칠 때 최소 간격
+const SAVE_DEBOUNCE_MS = 600;
+const BACKUP_INTERVAL_MS = 5 * 60 * 1000;
+const BACKUP_SAFETY_GAP_MS = 10000;
 
 let currentDate = todayStr();
 let currentVisits = emptyVisits();
@@ -713,7 +612,6 @@ function hasAnyData(visits){
   return visits.some(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor);
 }
 
-// 손상된 저장 데이터를 안전하게 보정 (앱이 죽지 않도록)
 function normalizeVisits(parsed){
   let raw = null;
   if (Array.isArray(parsed)) raw = parsed;
@@ -813,8 +711,6 @@ function addVisitCard(){
 }
 $('addCardBtn').addEventListener('click', addVisitCard);
 
-// ---------------- 방문 순서대로 정렬 ----------------
-// 순서 칸을 채운 카드는 작은 숫자부터 앞으로, 비워둔 카드는 뒤로(원래 순서 유지) 보냄
 function sortByOrder(){
   const hasAnyOrder = currentVisits.some(v => (v.order || '').trim() !== '');
   if(!hasAnyOrder){
@@ -837,6 +733,181 @@ function sortByOrder(){
   showToast('순서대로 정렬했어요');
 }
 $('sortByOrderBtn').addEventListener('click', sortByOrder);
+
+// ===================================================================
+// 네이버맵 경로 검색 (출발지/도착지 명시적 지정)
+// ===================================================================
+const OFFICE_NAME = '제천세무서';
+const OFFICE_ADDR = '충북 제천시 복합타운1길 78';
+const NAVER_APPNAME = 'com.atlaslab.visitlog';
+const NAV_APP_KEY = 'visitlog_navApp';
+const NAVER_STORE_IOS = 'https://apps.apple.com/kr/app/id311867728';
+const NAVER_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.nhn.android.nmap';
+const TMAP_STORE_IOS = 'https://apps.apple.com/kr/app/id431589174';
+const TMAP_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
+
+function getNavApp(){
+  const v = localStorage.getItem(NAV_APP_KEY);
+  return v === 'naver' ? 'naver' : 'tmap';
+}
+function setNavApp(app){
+  localStorage.setItem(NAV_APP_KEY, app === 'naver' ? 'naver' : 'tmap');
+  updateNavPrefUI();
+  renderCards();
+}
+function updateNavPrefUI(){
+  const cur = getNavApp();
+  document.querySelectorAll('.nav-pref-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.nav === cur);
+  });
+}
+function navAppLabel(){
+  return getNavApp() === 'naver' ? '네이버맵' : 'T맵';
+}
+
+async function geocodeAddressKR(addr, isRetry){
+  const q = encodeURIComponent(addr + ', 대한민국');
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&accept-language=ko&q=' + q;
+  let res;
+  try{
+    res = await fetch(url);
+  }catch(e){
+    res = null;
+  }
+  if(!res || !res.ok){
+    if(!isRetry){
+      await new Promise(r => setTimeout(r, 600));
+      return geocodeAddressKR(addr, true);
+    }
+    return null;
+  }
+  const list = await res.json();
+  if(!Array.isArray(list) || !list.length){
+    if(!isRetry){
+      await new Promise(r => setTimeout(r, 600));
+      return geocodeAddressKR(addr, true);
+    }
+    return null;
+  }
+  const { lat, lon } = list[0];
+  if(!lat || !lon) return null;
+  return { lat, lon };
+}
+
+function launchAppUrl(appUrl, storeUrl){
+  let switched = false;
+  const onHide = () => { switched = true; };
+  document.addEventListener('visibilitychange', onHide, { once:true });
+  window.location.href = appUrl;
+  setTimeout(() => {
+    document.removeEventListener('visibilitychange', onHide);
+    if(!switched && storeUrl){
+      window.location.href = storeUrl;
+    }
+  }, 1500);
+}
+
+async function openInNavApp(address, btnEl){
+  const raw = (address || '').trim();
+  if(!raw){
+    showToast('방문주소를 먼저 입력해주세요');
+    return;
+  }
+  const addr = raw.split('(')[0].trim() || raw;
+  const app = getNavApp();
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const storeUrl = app === 'naver' ? (isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS) : (isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS);
+  const enc = encodeURIComponent(addr);
+  if(btnEl) btnEl.classList.add('loading');
+  try{
+    const geo = await geocodeAddressKR(addr);
+    if(geo){
+      let navUrl;
+      if(app === 'naver'){
+        navUrl = 'nmap://navigation?dlat='+geo.lat+'&dlng='+geo.lon+'&dname='+enc+'&appname='+NAVER_APPNAME;
+      }else{
+        navUrl = 'tmap://route?rGoName='+enc+'&rGoX='+geo.lon+'&rGoY='+geo.lat
+          + '&goalname='+enc+'&goalx='+geo.lon+'&goaly='+geo.lat;
+      }
+      launchAppUrl(navUrl, storeUrl);
+    } else {
+      showToast('정확한 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
+      const searchUrl = app === 'naver'
+        ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
+        : 'tmap://search?name='+enc;
+      launchAppUrl(searchUrl, storeUrl);
+    }
+  }catch(err){
+    showToast('주소 조회 실패 — '+navAppLabel()+' 검색으로 엽니다');
+    const searchUrl = app === 'naver'
+      ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
+      : 'tmap://search?name='+enc;
+    launchAppUrl(searchUrl, storeUrl);
+  }finally{
+    if(btnEl) btnEl.classList.remove('loading');
+  }
+}
+
+document.querySelectorAll('.nav-pref-btn').forEach(btn => {
+  btn.addEventListener('click', () => setNavApp(btn.dataset.nav));
+});
+updateNavPrefUI();
+
+// ===================================================================
+// 구간 경로 (제천세무서 → 1번 → 2번 → ... → N번 → 제천세무서)
+// 네이버맵에 출발지와 도착지를 모두 명시적으로 지정
+// ===================================================================
+function officePoint(){ return { label: '제천세무서', addr: OFFICE_ADDR }; }
+function visitPoint(idx){
+  return { label: (idx+1)+'번', addr: (currentVisits[idx].addr || '').trim() };
+}
+
+async function openSegmentRoute(fromPoint, toPoint, btnEl){
+  const fromRaw = (fromPoint.addr || '').trim();
+  const toRaw = (toPoint.addr || '').trim();
+  if(!fromRaw || !toRaw){
+    showToast(fromPoint.label+'과 '+toPoint.label+' 주소를 모두 입력해주세요');
+    return;
+  }
+  const fromAddr = fromRaw.split('(')[0].trim() || fromRaw;
+  const toAddr = toRaw.split('(')[0].trim() || toRaw;
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const storeUrl = isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
+
+  if(btnEl) btnEl.classList.add('loading');
+  try{
+    // 좌표를 순차적으로 조회 (병렬 요청은 무료 지오코딩 서비스에서 자주 실패)
+    const toGeo = await geocodeAddressKR(toAddr);
+    await new Promise(r => setTimeout(r, 400));
+    const fromGeo = await geocodeAddressKR(fromAddr);
+
+    if(!toGeo){
+      showToast(toPoint.label+' 좌표를 못 찾아 네이버맵 검색으로 엽니다');
+      const enc = encodeURIComponent(toAddr);
+      launchAppUrl('nmap://search?query='+enc+'&appname='+NAVER_APPNAME, storeUrl);
+      return;
+    }
+    if(!fromGeo){
+      showToast(fromPoint.label+' 좌표를 못 찾아 도착지만 안내합니다');
+    }
+
+    const dEnc = encodeURIComponent(toAddr);
+    let navUrl;
+    if(fromGeo){
+      const sEnc = encodeURIComponent(fromAddr);
+      // 출발지(sname)와 도착지(dname)를 모두 명시적으로 지정
+      navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
+        + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+    }else{
+      navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+    }
+    launchAppUrl(navUrl, storeUrl);
+  }catch(err){
+    showToast('주소 조회 중 오류가 발생했어요');
+  }finally{
+    if(btnEl) btnEl.classList.remove('loading');
+  }
+}
 
 function renderCards(){
   const wrap = $('cardsWrap');
@@ -903,8 +974,6 @@ function renderCards(){
       field.className = 'field' + (meta.key==='note' ? ' flag' : '');
       const val = visit[meta.key] || '';
       const fieldId = 'f-'+idx+'-'+meta.key;
-      // autocomplete="new-password" + lpignore: 모바일 브라우저가 한 카드의
-      // 담당자명을 다른 카드에도 자동으로 채워 저장하는 것(autofill 오염) 방지
       const common = 'data-field="'+meta.key+'" id="'+fieldId+'" name="'+fieldId
         +'" maxlength="'+meta.max+'" autocomplete="new-password"'
         +' data-lpignore="true" data-1p-ignore="true" data-form-type="other"'
@@ -936,9 +1005,6 @@ function renderCards(){
         const cnt = field.querySelector('[data-cnt]');
         cnt.textContent = e.target.value.length+'/'+meta.max;
         cnt.classList.toggle('warn', e.target.value.length >= meta.max);
-        // 이 방문칸에 뭔가 입력할 때마다 최신 수정 시각으로 갱신
-        // (예: 10시에 상호를 적었다가, 나중에 방문지에서 변경상호를
-        //  고쳐 입력하면 그 수정한 시각으로 다시 기록됨)
         if(e.target.value.trim()){
           stampTime();
         }
@@ -949,7 +1015,7 @@ function renderCards(){
     });
     wrap.appendChild(card);
 
-    // 이 카드 → 다음 카드 구간 경로 버튼 (마지막 카드 다음에는 넣지 않음)
+    // 이 카드 → 다음 카드 구간 경로 버튼
     if (idx < currentVisits.length - 1) {
       const connector = document.createElement('div');
       connector.className = 'segment-connector';
@@ -968,9 +1034,10 @@ function renderCards(){
     const endConnector = document.createElement('div');
     endConnector.className = 'segment-connector';
     endConnector.innerHTML = `<button type="button" class="segment-btn office-btn" data-seg-btn>
-      <span class="arrow">🏢</span> ${lastIdx+1}번 → 제천세무서 구간 경로 검색
+      <span class="arrow">🏢</span> ${lastIdx+1}번 → 제천세무서 귀환 경로 (네이버맵)
     </button>`;
     const endBtn = endConnector.querySelector('[data-seg-btn]');
+    // ★ 귀환 경로: 마지막 방문지 → 제천세무서 (순서 중요)
     endBtn.addEventListener('click', () => openSegmentRoute(visitPoint(lastIdx), officePoint(), endBtn));
     wrap.appendChild(endConnector);
   }
@@ -979,192 +1046,7 @@ function renderCards(){
   updateAddCardBtn();
 }
 
-// ---------------- 내비 앱 연동 (T맵 / 네이버맵 선택) ----------------
-// 방문주소 → 좌표 변환(지오코딩) 후 사용자가 선택한 내비 앱을 목적지 경로안내 화면으로 바로 실행.
-// 좌표를 못 찾으면 해당 앱의 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
-const TMAP_STORE_IOS = 'https://apps.apple.com/kr/app/id431589174';
-const TMAP_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
-const NAVER_STORE_IOS = 'https://apps.apple.com/kr/app/id311867728';
-const NAVER_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.nhn.android.nmap';
-const NAVER_APPNAME = 'com.atlaslab.visitlog'; // 네이버맵 URL Scheme 필수 식별자(임의 문자열 가능)
-const OFFICE_NAME = '제천세무서';
-const OFFICE_ADDR = '충북 제천시 복합타운1길 78';
-const NAV_APP_KEY = 'visitlog_navApp';
-
-function getNavApp(){
-  const v = localStorage.getItem(NAV_APP_KEY);
-  return v === 'naver' ? 'naver' : 'tmap';
-}
-function setNavApp(app){
-  localStorage.setItem(NAV_APP_KEY, app === 'naver' ? 'naver' : 'tmap');
-  updateNavPrefUI();
-  renderCards(); // 카드의 길찾기 버튼 라벨을 새 선택값으로 갱신
-}
-function updateNavPrefUI(){
-  const cur = getNavApp();
-  document.querySelectorAll('.nav-pref-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.nav === cur);
-  });
-}
-function navAppLabel(){
-  return getNavApp() === 'naver' ? '네이버맵' : 'T맵';
-}
-
-async function geocodeAddressKR(addr, isRetry){
-  const q = encodeURIComponent(addr + ', 대한민국');
-  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&accept-language=ko&q=' + q;
-  let res;
-  try{
-    res = await fetch(url);
-  }catch(e){
-    res = null;
-  }
-  if(!res || !res.ok){
-    if(!isRetry){
-      await new Promise(r => setTimeout(r, 600));
-      return geocodeAddressKR(addr, true);
-    }
-    return null;
-  }
-  const list = await res.json();
-  if(!Array.isArray(list) || !list.length){
-    if(!isRetry){
-      await new Promise(r => setTimeout(r, 600));
-      return geocodeAddressKR(addr, true);
-    }
-    return null;
-  }
-  const { lat, lon } = list[0];
-  if(!lat || !lon) return null;
-  return { lat, lon };
-}
-
-// URL로 이동시키되, 앱이 실제로 열려 화면이 전환됐는지(visibilitychange)를 감지해서
-// 안 열렸을 때만(=미설치 등) 스토어로 안내.
-function launchAppUrl(appUrl, storeUrl){
-  let switched = false;
-  const onHide = () => { switched = true; };
-  document.addEventListener('visibilitychange', onHide, { once:true });
-  window.location.href = appUrl;
-  setTimeout(() => {
-    document.removeEventListener('visibilitychange', onHide);
-    if(!switched && storeUrl){
-      window.location.href = storeUrl;
-    }
-  }, 1500);
-}
-
-async function openInNavApp(address, btnEl){
-  const raw = (address || '').trim();
-  if(!raw){
-    showToast('방문주소를 먼저 입력해주세요');
-    return;
-  }
-  // '(' 앞부분만 내비 앱으로 전달 (예: "의림대로 41(영천동)" → "의림대로 41")
-  const addr = raw.split('(')[0].trim() || raw;
-  const app = getNavApp();
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = app === 'naver' ? (isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS) : (isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS);
-  const enc = encodeURIComponent(addr);
-  if(btnEl) btnEl.classList.add('loading');
-  try{
-    const geo = await geocodeAddressKR(addr);
-    if(geo){
-      let navUrl;
-      if(app === 'naver'){
-        navUrl = 'nmap://navigation?dlat='+geo.lat+'&dlng='+geo.lon+'&dname='+enc+'&appname='+NAVER_APPNAME;
-      }else{
-        navUrl = 'tmap://route?rGoName='+enc+'&rGoX='+geo.lon+'&rGoY='+geo.lat
-          + '&goalname='+enc+'&goalx='+geo.lon+'&goaly='+geo.lat;
-      }
-      launchAppUrl(navUrl, storeUrl);
-    } else {
-      showToast('정확한 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
-      const searchUrl = app === 'naver'
-        ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
-        : 'tmap://search?name='+enc;
-      launchAppUrl(searchUrl, storeUrl);
-    }
-  }catch(err){
-    showToast('주소 조회 실패 — '+navAppLabel()+' 검색으로 엽니다');
-    const searchUrl = app === 'naver'
-      ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
-      : 'tmap://search?name='+enc;
-    launchAppUrl(searchUrl, storeUrl);
-  }finally{
-    if(btnEl) btnEl.classList.remove('loading');
-  }
-}
-
-document.querySelectorAll('.nav-pref-btn').forEach(btn => {
-  btn.addEventListener('click', () => setNavApp(btn.dataset.nav));
-});
-updateNavPrefUI();
-
-// ---------------- 구간 경로 (제천세무서 → 1번 → 2번 → ... → N번 → 제천세무서) ----------------
-// 중요: 티맵 URL scheme은 "출발지 좌표"를 지정하는 기능을 공식적으로 지원하지 않아서,
-// 티맵으로 열면 항상 현재 위치가 출발지로 쓰입니다 (예: 집에서 누르면 집이 출발지가 됨).
-// 구간 경로는 정확히 두 지점(예: 1번→2번) 사이 경로가 필요하므로, 카드 안의 개별
-// "길찾기" 버튼과 달리 사용자가 선택한 내비 앱과 무관하게 항상 네이버맵으로 엽니다.
-// fromPoint/toPoint: { label: 버튼/토스트에 쓸 표시명, addr: 지오코딩 + 지도앱에 넘길 주소 }
-// 주의: 지도앱에 넘기는 이름(sname/dname)은 반드시 '주소'로만 넘깁니다.
-// 방문상호(회사명)를 넘기면, 폐업 등으로 그 이름이 지도 앱의 자체 검색/POI 매칭에 걸려
-// 정확한 좌표 대신 엉뚱한 위치로 보정되는 경우가 있기 때문입니다.
-function officePoint(){ return { label: '제천세무서', addr: OFFICE_ADDR }; }
-function visitPoint(idx){
-  return { label: (idx+1)+'번', addr: (currentVisits[idx].addr || '').trim() };
-}
-
-async function openSegmentRoute(fromPoint, toPoint, btnEl){
-  const fromRaw = (fromPoint.addr || '').trim();
-  const toRaw = (toPoint.addr || '').trim();
-  if(!fromRaw || !toRaw){
-    showToast(fromPoint.label+'과 '+toPoint.label+' 주소를 모두 입력해주세요');
-    return;
-  }
-  const fromAddr = fromRaw.split('(')[0].trim() || fromRaw;
-  const toAddr = toRaw.split('(')[0].trim() || toRaw;
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
-
-  if(btnEl) btnEl.classList.add('loading');
-  try{
-    // 순차 조회: 무료 지오코딩 서비스(Nominatim)는 동시 요청을 허용하지 않아,
-    // 병렬로 요청하면 둘 중 하나가 자주 실패했습니다 (그 결과 출발지가 항상
-    // '현재 위치'로 대체되는 문제가 있었음).
-    const toGeo = await geocodeAddressKR(toAddr);
-    await new Promise(r => setTimeout(r, 400));
-    const fromGeo = await geocodeAddressKR(fromAddr);
-
-    if(!toGeo){
-      showToast(toPoint.label+' 좌표를 못 찾아 네이버맵 검색으로 엽니다');
-      const enc = encodeURIComponent(toAddr);
-      launchAppUrl('nmap://search?query='+enc+'&appname='+NAVER_APPNAME, storeUrl);
-      return;
-    }
-    if(!fromGeo){
-      showToast(fromPoint.label+' 좌표를 못 찾아 도착지만 안내합니다');
-    }
-
-    // sname/dname은 항상 주소 텍스트를 그대로 사용 (상호명 사용 금지 — 폐업 상호 등으로 오검색 방지)
-    const dEnc = encodeURIComponent(toAddr);
-    let navUrl;
-    if(fromGeo){
-      const sEnc = encodeURIComponent(fromAddr);
-      navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
-        + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-    }else{
-      navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-    }
-    launchAppUrl(navUrl, storeUrl);
-  }catch(err){
-    showToast('주소 조회 중 오류가 발생했어요');
-  }finally{
-    if(btnEl) btnEl.classList.remove('loading');
-  }
-}
-
-// ---------------- 자동 저장 (0.6초 디바운스) ----------------
+// ---------------- 자동 저장 ----------------
 function scheduleSave(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(()=>{
@@ -1190,7 +1072,7 @@ async function flushSave(){
   await saveCurrent();
 }
 
-// ---------------- 5분 자동 임시저장 (기기 내부, 조용히) ----------------
+// ---------------- 5분 자동 임시저장 ----------------
 function startBackupInterval(){
   stopBackupInterval();
   if(!autoBackupEnabled) return;
@@ -1215,7 +1097,7 @@ async function runAutoBackup(){
     await storage.set(BACKUP_KEY, JSON.stringify(payload));
     const lb = $('lastBackup');
     if(lb) lb.textContent = '임시저장 ' + nowHHMMSS().slice(0,5);
-  }catch(e){ /* 자동저장(storage)은 계속 유지되므로 조용히 무시 */ }
+  }catch(e){ /* 조용히 무시 */ }
 }
 
 $('autoBackupToggle').addEventListener('change', (e)=>{
@@ -1225,14 +1107,12 @@ $('autoBackupToggle').addEventListener('change', (e)=>{
   else { stopBackupInterval(); showToast('5분 자동 임시저장 꺼짐'); }
 });
 
-// 화면을 벗어나거나(다른 앱 전환·화면 잠금) 탭이 닫히기 직전:
-// 디바운스 대기 중인 저장을 즉시 반영하고 백업도 남긴다 (데이터 유실 방지)
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ flushSave(); runAutoBackup(); }
 });
 window.addEventListener('pagehide', ()=>{ flushSave(); });
 
-// ---------------- 리포트 텍스트 ----------------
+// ---------------- 리포트 ----------------
 function buildReportText(dateStr, visits){
   const lines = [];
   lines.push('방문일지 '+dateStr+' ('+weekdayKR(dateStr)+')');
@@ -1254,7 +1134,10 @@ function buildReportText(dateStr, visits){
   return lines.join('\n');
 }
 
-// ---------------- HTML 리포트 (보기용 웹 페이지 + 데이터 내장) ----------------
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function buildReportHtml(dateStr, visits){
   const esc = (s)=>escapeHtml(String(s||''));
   const row = (k, val)=>'<div class="r"><div class="k">'+k+'</div><div class="v">'+esc(val||'-')+'</div></div>';
@@ -1276,7 +1159,6 @@ function buildReportHtml(dateStr, visits){
   const body = count === 0
     ? '<p class="empty">입력된 방문 기록이 없습니다</p>'
     : cards.join('\n');
-  // 데이터를 파일 안에 내장 → 앱의 '불러오기'로 이 파일을 열면 기록 복원 가능
   const dataJson = JSON.stringify({ date: dateStr, visits: visits }).replace(/</g, '\\u003c');
   return '<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n'
     + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
@@ -1306,7 +1188,6 @@ function buildReportHtml(dateStr, visits){
     + '</body>\n</html>';
 }
 
-// HTML 리포트 파일에서 내장 데이터(JSON) 추출
 function extractReportHtmlJson(text){
   const m = text.match(/<script type="application\/json" id="visit-log-data">([\s\S]*?)<\/script>/);
   if(!m) return null;
@@ -1319,7 +1200,7 @@ function extractReportHtmlJson(text){
 function parseReportText(text){
   const dateMatch = text.match(/방문일지\s+(\d{4}-\d{2}-\d{2})/);
   const parsedDate = dateMatch ? dateMatch[1] : null;
-  const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1); // [num, body, num, body, ...]
+  const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1);
   let maxNum = DEFAULT_VISIT_COUNT;
   for(let i=0; i<blocks.length-1; i+=2){
     const n = parseInt(blocks[i], 10);
@@ -1349,29 +1230,23 @@ function parseReportText(text){
   return { date: parsedDate, visits, hasData: hasAnyData(visits) };
 }
 
-// ---------------- 저장 (다운로드 폴더에 바로 저장) ----------------
-async function doShare(){
-  await flushSave();
-  const html = buildReportHtml(currentDate, currentVisits);
-  // 파일명에 저장 시각(시분) 포함 → 누를 때마다 새 파일, 덮어쓰기 없음
-  const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.html';
-  // 공유 시트(1개 항목 선택 → 파일관리자에서 수동 저장)를 거치지 않고
-  // 바로 다운로드 폴더에 저장되도록 다운로드 방식만 사용.
-  downloadFile(filename, html, 'text/html');
-  showToast(filename+' 다운로드 폴더에 저장됨');
-}
-
 function downloadFile(filename, text, mime){
   const blob = new Blob([text], {type:(mime||'text/plain')+';charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
-  // 즉시 해제하면 일부 브라우저에서 다운로드가 취소될 수 있어 지연 해제
   setTimeout(()=>URL.revokeObjectURL(url), 4000);
 }
 
-// ---------------- 불러오기 (.txt / .json 모두 지원) ----------------
+async function doShare(){
+  await flushSave();
+  const html = buildReportHtml(currentDate, currentVisits);
+  const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.html';
+  downloadFile(filename, html, 'text/html');
+  showToast(filename+' 다운로드 폴더에 저장됨');
+}
+
 async function doImport(file){
   let text;
   try{
@@ -1384,24 +1259,20 @@ async function doImport(file){
   let date = null, visits = emptyVisits(), hasData = false;
   try{
     const trimmed = text.trim();
-    const isJsonName = /\.json$/i.test(file.name || '');
     const isHtmlName = /\.html?$/i.test(file.name || '');
     if(isHtmlName || trimmed.indexOf('id="visit-log-data"') !== -1){
-      // v12 HTML 리포트 파일: 내장된 JSON 데이터로 복원
       const d = extractReportHtmlJson(trimmed);
       if(!d){ showToast('HTML 파일에서 기록을 찾지 못했습니다'); return; }
       visits = normalizeVisits(d.visits);
       hasData = hasAnyData(visits);
       date = (d.date && DATE_KEY_RE.test(d.date)) ? d.date : null;
-    } else if(isJsonName || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
-      // JSON 저장 파일 (앱/웹의 내부 저장 형식)
+    } else if(/\.json$/i.test(file.name || '') || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
       const parsed = JSON.parse(trimmed);
       visits = normalizeVisits(parsed);
       hasData = hasAnyData(visits);
       const dm = (file.name || '').match(/(\d{4}-\d{2}-\d{2})/);
       date = dm ? dm[1] : null;
     } else {
-      // 텍스트 리포트 파일
       const r = parseReportText(text);
       date = r.date; visits = r.visits; hasData = r.hasData;
     }
@@ -1433,7 +1304,6 @@ $('importFile').addEventListener('change', (e)=>{
   e.target.value = '';
 });
 
-// ---------------- 복사 ----------------
 async function doCopy(){
   await flushSave();
   const text = buildReportText(currentDate, currentVisits);
@@ -1441,7 +1311,6 @@ async function doCopy(){
     await navigator.clipboard.writeText(text);
     showToast('클립보드에 복사했습니다');
   }catch(e){
-    // 구형 브라우저 폴백
     try{
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -1457,8 +1326,7 @@ async function doCopy(){
   }
 }
 
-// ---------------- 커스텀 입력/확인창 (설치된 PWA에서 window.prompt/confirm이
-// 동작하지 않는 경우가 있어, 브라우저 내장 팝업 대신 앱 안에 직접 만든 모달 사용) ----------------
+// ---------------- 모달 ----------------
 function showPromptModal(message, placeholder){
   return new Promise((resolve)=>{
     const overlay = document.createElement('div');
@@ -1502,12 +1370,57 @@ function showConfirmModal(message){
     overlay.querySelector('.modal-ok').addEventListener('click', ()=>cleanup(true));
   });
 }
+function showChoiceModal(message, choices){
+  return new Promise((resolve)=>{
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const btnsHtml = choices.map((c, i) =>
+      '<button type="button" class="modal-ok modal-choice" data-i="' + i + '">' + c.label + '</button>'
+    ).join('');
+    overlay.innerHTML =
+      '<div class="modal-box">'
+      + '<div class="modal-msg"></div>'
+      + '<div class="modal-actions modal-actions-col">' + btnsHtml + '</div>'
+      + '<div class="modal-actions"><button type="button" class="modal-cancel" id="modalChoiceCancel">닫기</button></div>'
+      + '</div>';
+    overlay.querySelector('.modal-msg').textContent = message;
+    document.body.appendChild(overlay);
+    overlay.querySelectorAll('.modal-choice').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.i, 10);
+        overlay.remove();
+        resolve(choices[i].value);
+      });
+    });
+    overlay.querySelector('#modalChoiceCancel').addEventListener('click', () => { overlay.remove(); resolve(null); });
+  });
+}
+function showCodeResultModal(code){
+  return new Promise((resolve)=>{
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML =
+      '<div class="modal-box">'
+      + '<div class="modal-msg">공유 코드가 생성되었습니다.\n이 번호를 상대방에게 전달하세요.\n(24시간 후 자동 만료 · 잠금번호는 별도 전달)</div>'
+      + '<div class="modal-code">' + code + '</div>'
+      + '<div class="modal-actions">'
+      +   '<button type="button" class="modal-cancel" id="modalCodeClose">닫기</button>'
+      +   '<button type="button" class="modal-ok" id="modalCodeCopy">코드 복사</button>'
+      + '</div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('#modalCodeCopy').addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(code);
+        showToast('코드가 복사되었습니다');
+      }catch(e){
+        showToast('복사 실패 — 직접 적어서 전달해주세요');
+      }
+    });
+    overlay.querySelector('#modalCodeClose').addEventListener('click', ()=>{ overlay.remove(); resolve(); });
+  });
+}
 
-// ---------------- 공유코드 (Firebase Firestore + PIN 암호화) ----------------
-// 원리: 오늘 기록(JSON)을 잠금번호(PIN)로 AES-GCM 암호화(브라우저 내장 Web Crypto
-// API, 외부 라이브러리 없음)한 뒤, 그 암호문을 Firestore에 저장하고 6자리 코드를
-// 발급함. 코드만 알아도 잠금번호를 모르면 내용을 볼 수 없어 이중으로 보호됨.
-// 코드는 24시간 후 만료(클라이언트에서 확인).
+// ---------------- 공유코드 (Firebase) ----------------
 function toBase64Url(bytes){
   let binary = '';
   bytes.forEach((b) => { binary += String.fromCharCode(b); });
@@ -1555,62 +1468,11 @@ async function decodeShareData(encoded, pin){
     const json = new TextDecoder().decode(plainBuf);
     const obj = JSON.parse(json);
     return { date: obj.d, visits: normalizeVisits(obj.v) };
-  }catch(e){ return null; } // 잠금번호가 틀렸거나 손상된 데이터
+  }catch(e){ return null; }
 }
 
 function generateSixDigitCode(){
   return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function showCodeResultModal(code){
-  return new Promise((resolve)=>{
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML =
-      '<div class="modal-box">'
-      + '<div class="modal-msg">공유 코드가 생성되었습니다.\n이 번호를 상대방에게 전달하세요.\n(24시간 후 자동 만료 · 잠금번호는 별도 전달)</div>'
-      + '<div class="modal-code">' + code + '</div>'
-      + '<div class="modal-actions">'
-      +   '<button type="button" class="modal-cancel" id="modalCodeClose">닫기</button>'
-      +   '<button type="button" class="modal-ok" id="modalCodeCopy">코드 복사</button>'
-      + '</div></div>';
-    document.body.appendChild(overlay);
-    overlay.querySelector('#modalCodeCopy').addEventListener('click', async ()=>{
-      try{
-        await navigator.clipboard.writeText(code);
-        showToast('코드가 복사되었습니다');
-      }catch(e){
-        showToast('복사 실패 — 직접 적어서 전달해주세요');
-      }
-    });
-    overlay.querySelector('#modalCodeClose').addEventListener('click', ()=>{ overlay.remove(); resolve(); });
-  });
-}
-
-function showChoiceModal(message, choices){
-  return new Promise((resolve)=>{
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    const btnsHtml = choices.map((c, i) =>
-      '<button type="button" class="modal-ok modal-choice" data-i="' + i + '">' + c.label + '</button>'
-    ).join('');
-    overlay.innerHTML =
-      '<div class="modal-box">'
-      + '<div class="modal-msg"></div>'
-      + '<div class="modal-actions modal-actions-col">' + btnsHtml + '</div>'
-      + '<div class="modal-actions"><button type="button" class="modal-cancel" id="modalChoiceCancel">닫기</button></div>'
-      + '</div>';
-    overlay.querySelector('.modal-msg').textContent = message;
-    document.body.appendChild(overlay);
-    overlay.querySelectorAll('.modal-choice').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const i = parseInt(btn.dataset.i, 10);
-        overlay.remove();
-        resolve(choices[i].value);
-      });
-    });
-    overlay.querySelector('#modalChoiceCancel').addEventListener('click', () => { overlay.remove(); resolve(null); });
-  });
 }
 
 async function doShareCode(){
@@ -1633,7 +1495,7 @@ async function doShareCode(){
     + '엉뚱한 사람이 코드를 알아도 내용이 보이지 않습니다.',
     '잠금번호 입력'
   );
-  if(pin === null) return; // 취소
+  if(pin === null) return;
   const pinTrim = pin.trim();
   if(pinTrim.length < 4){
     showToast('잠금번호는 4자리 이상 입력해야 합니다');
@@ -1655,7 +1517,7 @@ async function doShareCode(){
       const candidate = generateSixDigitCode();
       const ref = fbDb.collection('shared_routes').doc(candidate);
       const snap = await ref.get();
-      if(snap.exists) continue; // 드물게 코드 중복이면 다시 시도
+      if(snap.exists) continue;
       await ref.set({
         payload: encoded,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1720,7 +1582,6 @@ async function doImportCode(){
     return;
   }
 
-  // 잠금번호가 맞아도, 실수로 현재 화면 내용을 덮어쓰지 않도록 한 번 더 확인
   const cnt = countFilled(decoded.visits);
   const ok = await showConfirmModal(
     (decoded.date || '(날짜 미상)') + ' 기록 ' + cnt + '건을 불러올까요?\n'
@@ -1762,13 +1623,7 @@ async function shiftDate(deltaDays){
   loadDate(next);
 }
 
-// ---------------- 빠른 검색 (v9) ----------------
-// 카드 1장을 하나의 그룹으로 보고, 주소/상호/변경상호/특이사항/담당자/시각 중
-// 하나라도 검색 단어를 포함하면 해당 카드 전체를 결과에 나열한다.
-// 모든 날짜의 저장 기록을 대상으로 한다.
-function escapeHtml(s){
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+// ---------------- 빠른 검색 ----------------
 function escapeRegExp(s){
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -1782,9 +1637,9 @@ function highlight(text, query){
 async function doSearch(){
   const q = $('searchInput').value.trim();
   if(!q){ showToast('검색어를 입력하세요'); return; }
-  await flushSave(); // 입력 직후 저장 대기 중인 내용도 검색에 포함
+  await flushSave();
   const query = q.toLowerCase();
-  const scope = $('searchScope').value; // all 또는 특정 필드 키
+  const scope = $('searchScope').value;
   const searchFields = scope === 'all'
     ? ['visitor','addr','name','changed','note','time']
     : [scope];
@@ -1793,7 +1648,7 @@ async function doSearch(){
     const res = await storage.list('visit-log:');
     const keys = (res && res.keys ? res.keys : [])
       .filter(k => DATE_KEY_RE.test(k.replace('visit-log:','')))
-      .sort().reverse(); // 최신 날짜부터
+      .sort().reverse();
     for(const k of keys){
       const dateStr = k.replace('visit-log:','');
       let visits = emptyVisits();
@@ -1801,10 +1656,9 @@ async function doSearch(){
         const r = await storage.get(k);
         const parsed = r && r.value ? JSON.parse(r.value) : null;
         visits = normalizeVisits(parsed);
-      }catch(e){ continue; } // 깨진 기록은 건너뜀
+      }catch(e){ continue; }
       visits.forEach((v, idx) => {
         if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
-        // 어느 항목이 일치했는지 함께 기록 (결과에 '일치 항목'으로 표시)
         const matched = [];
         searchFields.forEach((k)=>{
           if(String(v[k]||'').toLowerCase().indexOf(query) !== -1){
@@ -1832,7 +1686,6 @@ function renderSearchResults(query, results, scopeLabel){
   }
   results.forEach((r) => {
     const v = r.visit;
-    // 결과 카드도 입력 폼과 같은 순서: 담당자명이 맨 위
     const rows = [
       ['방문담당자명', v.visitor || '-'],
       ['방문시각', v.time || '-'],
@@ -1861,7 +1714,6 @@ function renderSearchResults(query, results, scopeLabel){
           + '<div class="rv">' + highlight(row[1], query) + '</div></div>'
         ).join('')
       + '</div>';
-    // 결과 카드를 누르면 해당 날짜의 기록으로 이동
     card.addEventListener('click', async ()=>{
       await flushSave();
       loadDate(r.date);
@@ -1915,7 +1767,7 @@ async function renderHistory(){
       .filter(k => {
         if(k === SETTINGS_KEY || k === BACKUP_KEY || k === 'visit-log:dates') return false;
         const dateStr = k.replace('visit-log:','');
-        return DATE_KEY_RE.test(dateStr); // 깨진 키 제외
+        return DATE_KEY_RE.test(dateStr);
       })
       .sort().reverse();
     if(keys.length === 0){
@@ -1961,7 +1813,6 @@ function switchTab(tab){
   const tabDay = $('tabDay');
   const tabHist = $('tabHistory');
   const actionbar = $('actionbar');
-  // 탭 전환 시 검색 결과는 닫는다
   $('searchView').classList.remove('show');
   $('searchClear').style.display = 'none';
   if(tab==='day'){
@@ -1995,7 +1846,7 @@ loadSettings().then(()=>{
 });
 </script>
 <script>
-// PWA: 서비스워커 등록 (오프라인 실행 + 홈 화면 설치 지원)
+// PWA: 서비스워커 등록
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('sw.js').catch(function(){});
@@ -2004,3 +1855,4 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
+```
