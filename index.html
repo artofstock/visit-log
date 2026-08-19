@@ -1010,13 +1010,30 @@ function navAppLabel(){
   return getNavApp() === 'naver' ? '네이버맵' : 'T맵';
 }
 
-async function geocodeAddressKR(addr){
+async function geocodeAddressKR(addr, isRetry){
   const q = encodeURIComponent(addr + ', 대한민국');
   const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&accept-language=ko&q=' + q;
-  const res = await fetch(url);
-  if(!res.ok) return null;
+  let res;
+  try{
+    res = await fetch(url);
+  }catch(e){
+    res = null;
+  }
+  if(!res || !res.ok){
+    if(!isRetry){
+      await new Promise(r => setTimeout(r, 600));
+      return geocodeAddressKR(addr, true);
+    }
+    return null;
+  }
   const list = await res.json();
-  if(!Array.isArray(list) || !list.length) return null;
+  if(!Array.isArray(list) || !list.length){
+    if(!isRetry){
+      await new Promise(r => setTimeout(r, 600));
+      return geocodeAddressKR(addr, true);
+    }
+    return null;
+  }
   const { lat, lon } = list[0];
   if(!lat || !lon) return null;
   return { lat, lon };
@@ -1112,7 +1129,12 @@ async function openSegmentRoute(fromPoint, toPoint, btnEl){
 
   if(btnEl) btnEl.classList.add('loading');
   try{
-    const [fromGeo, toGeo] = await Promise.all([geocodeAddressKR(fromAddr), geocodeAddressKR(toAddr)]);
+    // 순차 조회: 무료 지오코딩 서비스(Nominatim)는 동시 요청을 허용하지 않아,
+    // 병렬로 요청하면 둘 중 하나가 자주 실패했습니다 (그 결과 출발지가 항상
+    // '현재 위치'로 대체되는 문제가 있었음).
+    const toGeo = await geocodeAddressKR(toAddr);
+    await new Promise(r => setTimeout(r, 400));
+    const fromGeo = await geocodeAddressKR(fromAddr);
 
     if(!toGeo){
       showToast(toPoint.label+' 좌표를 못 찾아 네이버맵 검색으로 엽니다');
