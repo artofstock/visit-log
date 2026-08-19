@@ -321,6 +321,43 @@
     display:flex;align-items:center;justify-content:center;
     flex-shrink:0;
   }
+  .order-area{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .order-area label{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.05em;
+    color:var(--ink-soft); text-transform:uppercase;
+  }
+  .order-input{
+    width:38px; height:26px; padding:0 2px; text-align:center;
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px;
+    border:1.5px solid var(--line); background:#fff; color:var(--ink);
+  }
+  .order-input:focus{ outline:none; border-color:var(--teal); }
+  .order-input.filled{ border-color:var(--teal-dark); color:var(--teal-dark); }
+  .sort-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin:0 0 14px;
+  }
+  .sort-row .hint{ font-size:11.5px; color:var(--ink-soft); line-height:1.5; }
+  .sort-btn{
+    flex-shrink:0; font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+    font-size:12.5px; font-weight:700; padding:9px 12px;
+    border:1.5px solid var(--teal-dark); background:#fff; color:var(--teal-dark);
+    cursor:pointer; white-space:nowrap;
+  }
+  .sort-btn:active{ background:var(--teal-dark); color:#fff; }
+  .segment-connector{
+    display:flex; align-items:center; justify-content:center;
+    margin: -6px 0 16px; position:relative; z-index:1;
+  }
+  .segment-btn{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600;
+    padding:6px 14px; border-radius:999px;
+    border:1.5px solid var(--teal-dark); background:var(--teal-pale); color:var(--teal-dark);
+    cursor:pointer; display:flex; align-items:center; gap:6px;
+  }
+  .segment-btn:active{ background:var(--teal-dark); color:#fff; }
+  .segment-btn.loading{ opacity:.55; pointer-events:none; }
+  .segment-btn .arrow{ font-size:13px; }
   .stub-label{
     font-family:'IBM Plex Mono',monospace;
     font-size:11px; letter-spacing:.1em; color:var(--ink-soft); text-transform:uppercase;
@@ -532,6 +569,10 @@
         <button type="button" class="nav-pref-btn" data-nav="naver">네이버맵</button>
       </div>
     </div>
+    <div class="sort-row">
+      <div class="hint">각 카드의 <b>순서</b> 칸에 방문 순서를 적고<br>정렬하면 그 순서대로 카드가 재배열돼요</div>
+      <button type="button" id="sortByOrderBtn" class="sort-btn">↓ 순서대로 정렬</button>
+    </div>
     <div id="cardsWrap"></div>
     <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
   </div>
@@ -653,7 +694,7 @@ function nowHHMMSS(){
 }
 function emptyVisits(n){
   const count = n || DEFAULT_VISIT_COUNT;
-  return Array.from({length: count}, () => ({addr:'',name:'',changed:'',note:'',time:'',visitor:''}));
+  return Array.from({length: count}, () => ({addr:'',name:'',changed:'',note:'',time:'',visitor:'',order:''}));
 }
 const _weekdayCache = {};
 function weekdayKR(dateStr){
@@ -685,6 +726,9 @@ function normalizeVisits(parsed){
       if (typeof src[m.key] === 'string') fixed[i][m.key] = src[m.key].slice(0, m.max);
     });
     if (typeof src.time === 'string') fixed[i].time = src.time;
+    if (typeof src.order === 'string' || typeof src.order === 'number') {
+      fixed[i].order = String(src.order).slice(0, 3);
+    }
   }
   return fixed;
 }
@@ -754,7 +798,7 @@ function addVisitCard(){
     showToast('카드는 최대 ' + MAX_VISIT_COUNT + '개까지 만들 수 있습니다');
     return;
   }
-  currentVisits.push({addr:'',name:'',changed:'',note:'',time:'',visitor:''});
+  currentVisits.push({addr:'',name:'',changed:'',note:'',time:'',visitor:'',order:''});
   renderCards();
   saveCurrent();
   showToast('카드가 추가되었습니다 (' + currentVisits.length + '/' + MAX_VISIT_COUNT + ')');
@@ -767,6 +811,31 @@ function addVisitCard(){
 }
 $('addCardBtn').addEventListener('click', addVisitCard);
 
+// ---------------- 방문 순서대로 정렬 ----------------
+// 순서 칸을 채운 카드는 작은 숫자부터 앞으로, 비워둔 카드는 뒤로(원래 순서 유지) 보냄
+function sortByOrder(){
+  const hasAnyOrder = currentVisits.some(v => (v.order || '').trim() !== '');
+  if(!hasAnyOrder){
+    showToast('먼저 카드마다 순서 번호를 입력해주세요');
+    return;
+  }
+  const withIndex = currentVisits.map((v, i) => ({ v, i }));
+  withIndex.sort((a, b) => {
+    const oa = a.v.order === '' ? null : parseInt(a.v.order, 10);
+    const ob = b.v.order === '' ? null : parseInt(b.v.order, 10);
+    if (oa === null && ob === null) return a.i - b.i;
+    if (oa === null) return 1;
+    if (ob === null) return -1;
+    if (oa !== ob) return oa - ob;
+    return a.i - b.i;
+  });
+  currentVisits = withIndex.map(x => x.v);
+  renderCards();
+  scheduleSave();
+  showToast('순서대로 정렬했어요');
+}
+$('sortByOrderBtn').addEventListener('click', sortByOrder);
+
 function renderCards(){
   const wrap = $('cardsWrap');
   wrap.innerHTML = '';
@@ -777,6 +846,10 @@ function renderCards(){
       <div class="card-head">
         <div class="stub-num">${idx+1}</div>
         <div class="stub-label">방문 ${idx+1} / ${currentVisits.length}</div>
+        <div class="order-area">
+          <label for="order-${idx}">순서</label>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" class="order-input" id="order-${idx}" data-order-input maxlength="3" placeholder="-">
+        </div>
         <div class="time-area">
           <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${visit.time || '미기록'}</span>
           <button type="button" class="time-btn" data-time-btn>재기록</button>
@@ -784,6 +857,16 @@ function renderCards(){
       </div>
       <div class="card-body"></div>
     `;
+    const orderInput = card.querySelector('[data-order-input]');
+    orderInput.value = visit.order || '';
+    orderInput.classList.toggle('filled', !!visit.order);
+    orderInput.addEventListener('input', (e)=>{
+      const v = e.target.value.replace(/[^0-9]/g,'').slice(0,3);
+      e.target.value = v;
+      currentVisits[idx].order = v;
+      orderInput.classList.toggle('filled', !!v);
+      scheduleSave();
+    });
     const timeBtn = card.querySelector('[data-time-btn]');
     const timeDisplay = card.querySelector('[data-time-display]');
     const stampTime = ()=>{
@@ -850,6 +933,18 @@ function renderCards(){
       body.appendChild(field);
     });
     wrap.appendChild(card);
+
+    // 이 카드 → 다음 카드 구간 경로 버튼 (마지막 카드 다음에는 넣지 않음)
+    if (idx < currentVisits.length - 1) {
+      const connector = document.createElement('div');
+      connector.className = 'segment-connector';
+      connector.innerHTML = `<button type="button" class="segment-btn" data-seg-btn>
+        <span class="arrow">↓</span> ${idx+1}번 → ${idx+2}번 구간 경로 검색
+      </button>`;
+      const segBtn = connector.querySelector('[data-seg-btn]');
+      segBtn.addEventListener('click', () => openSegmentRoute(idx, idx+1, segBtn));
+      wrap.appendChild(connector);
+    }
   });
   updateProgress();
   updateAddCardBtn();
@@ -957,6 +1052,62 @@ document.querySelectorAll('.nav-pref-btn').forEach(btn => {
   btn.addEventListener('click', () => setNavApp(btn.dataset.nav));
 });
 updateNavPrefUI();
+
+// ---------------- 구간 경로 (N번 방문지 → N+1번 방문지) ----------------
+// 네이버맵: 출발지·도착지 좌표를 모두 지정한 정식 경로(nmap://route/car)를 엽니다.
+// 티맵: 앱의 URL scheme이 출발지 좌표 지정을 공식 지원하지 않아, 도착지만 지정됩니다
+//       (앱을 열면 현재 위치가 출발지로 자동 사용돼요 — 실제로 그 자리에서 다음 방문지로
+//        출발할 때 누르면 결과적으로 똑같이 동작합니다).
+async function openSegmentRoute(fromIdx, toIdx, btnEl){
+  const fromRaw = (currentVisits[fromIdx].addr || '').trim();
+  const toRaw = (currentVisits[toIdx].addr || '').trim();
+  if(!fromRaw || !toRaw){
+    showToast((fromIdx+1)+'번과 '+(toIdx+1)+'번 방문지 주소를 모두 입력해주세요');
+    return;
+  }
+  const fromAddr = fromRaw.split('(')[0].trim() || fromRaw;
+  const toAddr = toRaw.split('(')[0].trim() || toRaw;
+  const app = getNavApp();
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const storeUrl = app === 'naver' ? (isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS) : (isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS);
+
+  if(btnEl) btnEl.classList.add('loading');
+  try{
+    const [fromGeo, toGeo] = await Promise.all([geocodeAddressKR(fromAddr), geocodeAddressKR(toAddr)]);
+
+    if(!toGeo){
+      showToast((toIdx+1)+'번 방문지 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
+      const enc = encodeURIComponent(toAddr);
+      const searchUrl = app === 'naver' ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME : 'tmap://search?name='+enc;
+      launchAppUrl(searchUrl, storeUrl);
+      return;
+    }
+
+    if(app === 'naver'){
+      const dEnc = encodeURIComponent(toAddr);
+      let navUrl;
+      if(fromGeo){
+        const sEnc = encodeURIComponent(fromAddr);
+        navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
+          + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+      }else{
+        navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+        showToast((fromIdx+1)+'번 출발지 좌표를 못 찾아 도착지만 안내합니다');
+      }
+      launchAppUrl(navUrl, storeUrl);
+    }else{
+      const dEnc = encodeURIComponent(toAddr);
+      const navUrl = 'tmap://route?rGoName='+dEnc+'&rGoX='+toGeo.lon+'&rGoY='+toGeo.lat
+        + '&goalname='+dEnc+'&goalx='+toGeo.lon+'&goaly='+toGeo.lat;
+      showToast('티맵은 도착지('+(toIdx+1)+'번)까지만 안내돼요 · 현재 위치가 출발지로 쓰여요');
+      launchAppUrl(navUrl, storeUrl);
+    }
+  }catch(err){
+    showToast('주소 조회 중 오류가 발생했어요');
+  }finally{
+    if(btnEl) btnEl.classList.remove('loading');
+  }
+}
 
 // ---------------- 자동 저장 (0.6초 디바운스) ----------------
 function scheduleSave(){
