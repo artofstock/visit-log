@@ -358,6 +358,8 @@
   .segment-btn:active{ background:var(--teal-dark); color:#fff; }
   .segment-btn.loading{ opacity:.55; pointer-events:none; }
   .segment-btn .arrow{ font-size:13px; }
+  .segment-btn.office-btn{ background:#A63D4014; border-color:var(--brick); color:var(--brick); }
+  .segment-btn.office-btn:active{ background:var(--brick); color:#fff; }
   .stub-label{
     font-family:'IBM Plex Mono',monospace;
     font-size:11px; letter-spacing:.1em; color:var(--ink-soft); text-transform:uppercase;
@@ -839,6 +841,19 @@ $('sortByOrderBtn').addEventListener('click', sortByOrder);
 function renderCards(){
   const wrap = $('cardsWrap');
   wrap.innerHTML = '';
+
+  // 출발: 제천세무서 → 1번 방문지
+  if(currentVisits.length){
+    const startConnector = document.createElement('div');
+    startConnector.className = 'segment-connector';
+    startConnector.innerHTML = `<button type="button" class="segment-btn office-btn" data-seg-btn>
+      <span class="arrow">🏢</span> 제천세무서 → 1번 구간 경로 검색
+    </button>`;
+    const startBtn = startConnector.querySelector('[data-seg-btn]');
+    startBtn.addEventListener('click', () => openSegmentRoute(officePoint(), visitPoint(0), startBtn));
+    wrap.appendChild(startConnector);
+  }
+
   currentVisits.forEach((visit, idx) => {
     const card = document.createElement('div');
     card.className = 'card';
@@ -942,10 +957,24 @@ function renderCards(){
         <span class="arrow">↓</span> ${idx+1}번 → ${idx+2}번 구간 경로 검색
       </button>`;
       const segBtn = connector.querySelector('[data-seg-btn]');
-      segBtn.addEventListener('click', () => openSegmentRoute(idx, idx+1, segBtn));
+      segBtn.addEventListener('click', () => openSegmentRoute(visitPoint(idx), visitPoint(idx+1), segBtn));
       wrap.appendChild(connector);
     }
   });
+
+  // 복귀: 마지막 방문지 → 제천세무서
+  if(currentVisits.length){
+    const lastIdx = currentVisits.length - 1;
+    const endConnector = document.createElement('div');
+    endConnector.className = 'segment-connector';
+    endConnector.innerHTML = `<button type="button" class="segment-btn office-btn" data-seg-btn>
+      <span class="arrow">🏢</span> ${lastIdx+1}번 → 제천세무서 구간 경로 검색
+    </button>`;
+    const endBtn = endConnector.querySelector('[data-seg-btn]');
+    endBtn.addEventListener('click', () => openSegmentRoute(visitPoint(lastIdx), officePoint(), endBtn));
+    wrap.appendChild(endConnector);
+  }
+
   updateProgress();
   updateAddCardBtn();
 }
@@ -958,6 +987,8 @@ const TMAP_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.skt.tm
 const NAVER_STORE_IOS = 'https://apps.apple.com/kr/app/id311867728';
 const NAVER_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.nhn.android.nmap';
 const NAVER_APPNAME = 'com.atlaslab.visitlog'; // 네이버맵 URL Scheme 필수 식별자(임의 문자열 가능)
+const OFFICE_NAME = '제천세무서';
+const OFFICE_ADDR = '충북 제천시 복합타운1길 78';
 const NAV_APP_KEY = 'visitlog_navApp';
 
 function getNavApp(){
@@ -1053,16 +1084,22 @@ document.querySelectorAll('.nav-pref-btn').forEach(btn => {
 });
 updateNavPrefUI();
 
-// ---------------- 구간 경로 (N번 방문지 → N+1번 방문지) ----------------
+// ---------------- 구간 경로 (제천세무서 → 1번 → 2번 → ... → N번 → 제천세무서) ----------------
 // 네이버맵: 출발지·도착지 좌표를 모두 지정한 정식 경로(nmap://route/car)를 엽니다.
 // 티맵: 앱의 URL scheme이 출발지 좌표 지정을 공식 지원하지 않아, 도착지만 지정됩니다
 //       (앱을 열면 현재 위치가 출발지로 자동 사용돼요 — 실제로 그 자리에서 다음 방문지로
 //        출발할 때 누르면 결과적으로 똑같이 동작합니다).
-async function openSegmentRoute(fromIdx, toIdx, btnEl){
-  const fromRaw = (currentVisits[fromIdx].addr || '').trim();
-  const toRaw = (currentVisits[toIdx].addr || '').trim();
+// fromPoint/toPoint: { label: 버튼/토스트에 쓸 표시명, name: 지도앱에 넘길 이름, addr: 지오코딩할 주소 }
+function officePoint(){ return { label: '제천세무서', name: OFFICE_NAME, addr: OFFICE_ADDR }; }
+function visitPoint(idx){
+  return { label: (idx+1)+'번', name: (currentVisits[idx].name || (idx+1)+'번 방문지'), addr: (currentVisits[idx].addr || '').trim() };
+}
+
+async function openSegmentRoute(fromPoint, toPoint, btnEl){
+  const fromRaw = (fromPoint.addr || '').trim();
+  const toRaw = (toPoint.addr || '').trim();
   if(!fromRaw || !toRaw){
-    showToast((fromIdx+1)+'번과 '+(toIdx+1)+'번 방문지 주소를 모두 입력해주세요');
+    showToast(fromPoint.label+'과 '+toPoint.label+' 주소를 모두 입력해주세요');
     return;
   }
   const fromAddr = fromRaw.split('(')[0].trim() || fromRaw;
@@ -1076,7 +1113,7 @@ async function openSegmentRoute(fromIdx, toIdx, btnEl){
     const [fromGeo, toGeo] = await Promise.all([geocodeAddressKR(fromAddr), geocodeAddressKR(toAddr)]);
 
     if(!toGeo){
-      showToast((toIdx+1)+'번 방문지 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
+      showToast(toPoint.label+' 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
       const enc = encodeURIComponent(toAddr);
       const searchUrl = app === 'naver' ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME : 'tmap://search?name='+enc;
       launchAppUrl(searchUrl, storeUrl);
@@ -1084,22 +1121,22 @@ async function openSegmentRoute(fromIdx, toIdx, btnEl){
     }
 
     if(app === 'naver'){
-      const dEnc = encodeURIComponent(toAddr);
+      const dEnc = encodeURIComponent(toPoint.name || toAddr);
       let navUrl;
       if(fromGeo){
-        const sEnc = encodeURIComponent(fromAddr);
+        const sEnc = encodeURIComponent(fromPoint.name || fromAddr);
         navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
           + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
       }else{
         navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-        showToast((fromIdx+1)+'번 출발지 좌표를 못 찾아 도착지만 안내합니다');
+        showToast(fromPoint.label+' 좌표를 못 찾아 도착지만 안내합니다');
       }
       launchAppUrl(navUrl, storeUrl);
     }else{
-      const dEnc = encodeURIComponent(toAddr);
+      const dEnc = encodeURIComponent(toPoint.name || toAddr);
       const navUrl = 'tmap://route?rGoName='+dEnc+'&rGoX='+toGeo.lon+'&rGoY='+toGeo.lat
         + '&goalname='+dEnc+'&goalx='+toGeo.lon+'&goaly='+toGeo.lat;
-      showToast('티맵은 도착지('+(toIdx+1)+'번)까지만 안내돼요 · 현재 위치가 출발지로 쓰여요');
+      showToast('티맵은 도착지('+toPoint.label+')까지만 안내돼요 · 현재 위치가 출발지로 쓰여요');
       launchAppUrl(navUrl, storeUrl);
     }
   }catch(err){
