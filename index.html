@@ -12,8 +12,21 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v19
+  방문일지 (Visit Log) v20
   =========================
+  v19 → v20 개선 사항:
+  1. 오전 / 오후 기록 분리:
+     - 날짜 아래에 "오전 / 오후" 탭이 추가됨. 같은 날짜라도 오전 방문과
+       오후 방문을 완전히 별도의 카드 묶음으로 나눠서 기록·저장.
+     - 저장 키가 날짜+오전/오후 단위로 나뉘어(예: 2026-08-21 오전 /
+       2026-08-21 오후) 서로 덮어쓰지 않음.
+     - 앱을 열면 현재 시각 기준으로 정오 이전이면 오전, 이후면 오후 탭이
+       자동으로 먼저 선택됨. 탭을 눌러 언제든 전환 가능.
+     - '지난 기록' 목록과 '빠른 검색' 결과에도 오전/오후가 함께 표시되어
+       구분됨.
+     - v19 이전 데이터(오전/오후 구분이 없던 기존 기록)는 자동으로
+       "오전" 기록으로 인식되어 그대로 이어서 볼 수 있음 (데이터 유실 없음).
+
   v18 → v19 개선 사항:
   1. 방문시각 자동 기록 방식 변경: "처음 입력한 시각"만 기록하던 것을,
      그 카드의 아무 항목이든 새로 수정할 때마다 최신 수정 시각으로
@@ -218,6 +231,21 @@
     font-size:14px; font-weight:600; color:var(--ink); width:100%; min-width:0;
   }
   .weekday{ color:var(--teal-dark); flex-shrink:0; }
+
+  .period-toggle{
+    display:flex; border:1.5px solid var(--ink); margin-top:8px; overflow:hidden;
+  }
+  .period-btn{
+    flex:1; border:none; background:var(--card); color:var(--ink);
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-weight:700;
+    font-size:14px; padding:9px 4px; cursor:pointer;
+  }
+  .period-btn + .period-btn{ border-left:1.5px solid var(--ink); }
+  .period-btn.active{ background:var(--teal-dark); color:#fff; }
+  .period-btn .period-count{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:11.5px;
+    opacity:.8; margin-left:4px;
+  }
 
   main{ position:relative; z-index:1; padding:16px; }
 
@@ -513,10 +541,10 @@
 
 <header>
   <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v12</span></div>
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v20</span></div>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
-  <h1>오늘의 방문 기록</h1>
+  <h1 id="mainTitle">오늘의 방문 기록</h1>
   <div class="date-nav">
     <button id="prevDay" type="button">‹</button>
     <div class="date-display">
@@ -524,6 +552,10 @@
       <input type="date" id="dateInput">
     </div>
     <button id="nextDay" type="button">›</button>
+  </div>
+  <div class="period-toggle" id="periodToggle">
+    <button type="button" class="period-btn" data-period="AM">오전<span class="period-count" id="periodCountAM"></span></button>
+    <button type="button" class="period-btn" data-period="PM">오후<span class="period-count" id="periodCountPM"></span></button>
   </div>
 </header>
 
@@ -667,11 +699,22 @@ const DEFAULT_VISIT_COUNT = 4;
 const MAX_VISIT_COUNT = 20;
 const BACKUP_KEY   = 'visit-log:backup';
 const DATE_KEY_RE  = /^\d{4}-\d{2}-\d{2}$/;
+// v20: 오전/오후 구분. 저장 키 형식은 'visit-log:YYYY-MM-DD:AM' 또는 ':PM'.
+// v19 이전(오전/오후 구분 없던 시절) 데이터는 접미사 없는 'visit-log:YYYY-MM-DD'
+// 형식이며, 이는 "오전" 기록으로 취급해 그대로 이어서 사용한다(레거시 호환).
+const PERIODS = ['AM','PM'];
+const PERIOD_LABEL = { AM:'오전', PM:'오후' };
+const DATE_KEY_FULL_RE = /^visit-log:(\d{4}-\d{2}-\d{2})(?::(AM|PM))?$/;
 const SAVE_DEBOUNCE_MS = 600;          // 입력 후 0.6초 뒤 자동 저장
 const BACKUP_INTERVAL_MS = 5 * 60 * 1000; // 5분마다 자동 임시저장
 const BACKUP_SAFETY_GAP_MS = 10000;    // 여러 트리거가 겹칠 때 최소 간격
 
+function defaultPeriod(){
+  return new Date().getHours() < 12 ? 'AM' : 'PM';
+}
+
 let currentDate = todayStr();
+let currentPeriod = defaultPeriod();
 let currentVisits = emptyVisits();
 let saveTimer = null;
 let backupIntervalId = null;
@@ -705,7 +748,8 @@ function weekdayKR(dateStr){
   _weekdayCache[dateStr] = r;
   return r;
 }
-function keyFor(dateStr){ return 'visit-log:'+dateStr; }
+function keyFor(dateStr, period){ return 'visit-log:'+dateStr+':'+(period||currentPeriod); }
+function legacyKeyFor(dateStr){ return 'visit-log:'+dateStr; } // v19 이전 형식(오전/오후 구분 없음)
 
 function hasAnyData(visits){
   return visits.some(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor);
@@ -758,12 +802,19 @@ function showToast(msg){
   toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
 }
 
-async function loadDate(dateStr){
+async function loadDate(dateStr, period){
   currentDate = dateStr;
+  if(period) currentPeriod = period;
   $('dateInput').value = dateStr;
   $('weekdayLabel').textContent = weekdayKR(dateStr);
+  updatePeriodUI();
   try{
-    const res = await storage.get(keyFor(dateStr));
+    let res = await storage.get(keyFor(dateStr, currentPeriod));
+    // 새 형식(오전/오후 구분) 기록이 없고, "오전" 탭이면 v19 이전 레거시
+    // 기록(구분 없던 시절)이 있는지 확인해서 그대로 보여준다.
+    if((!res || !res.value) && currentPeriod === 'AM'){
+      try{ res = await storage.get(legacyKeyFor(dateStr)); }catch(e){}
+    }
     const parsed = res && res.value ? JSON.parse(res.value) : null;
     currentVisits = normalizeVisits(parsed);
   }catch(e){
@@ -772,6 +823,32 @@ async function loadDate(dateStr){
   renderCards();
   const filled = countFilled(currentVisits);
   $('lastSaved').textContent = filled > 0 ? '기록 '+filled+'곳 있음' : '—';
+  refreshPeriodCounts();
+}
+
+function updatePeriodUI(){
+  document.querySelectorAll('.period-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.period === currentPeriod);
+  });
+  const title = $('mainTitle');
+  if(title) title.textContent = (currentPeriod === 'AM' ? '오전' : '오후') + ' 방문 기록';
+}
+
+// 오전/오후 탭 버튼에 각 기록 건수를 작게 표시 (참고용, 매번 저장소 조회)
+async function refreshPeriodCounts(){
+  for(const p of PERIODS){
+    const el = $('periodCount'+p);
+    if(!el) continue;
+    try{
+      let res = await storage.get(keyFor(currentDate, p));
+      if((!res || !res.value) && p === 'AM'){
+        try{ res = await storage.get(legacyKeyFor(currentDate)); }catch(e){}
+      }
+      const parsed = res && res.value ? JSON.parse(res.value) : null;
+      const filled = countFilled(normalizeVisits(parsed));
+      el.textContent = filled > 0 ? ' '+filled : '';
+    }catch(e){ el.textContent = ''; }
+  }
 }
 
 function countFilled(visits){
@@ -1120,8 +1197,9 @@ function scheduleSave(){
 
 async function saveCurrent(){
   try{
-    await storage.set(keyFor(currentDate), JSON.stringify(currentVisits));
+    await storage.set(keyFor(currentDate, currentPeriod), JSON.stringify(currentVisits));
     $('lastSaved').textContent = '저장됨 ' + nowHHMMSS().slice(0,5);
+    refreshPeriodCounts();
   }catch(e){
     $('lastSaved').textContent = '저장 실패';
   }
@@ -1155,6 +1233,7 @@ async function runAutoBackup(){
     const payload = {
       savedAt: new Date().toISOString(),
       date: currentDate,
+      period: currentPeriod,
       visits: currentVisits,
     };
     await storage.set(BACKUP_KEY, JSON.stringify(payload));
@@ -1178,9 +1257,10 @@ document.addEventListener('visibilitychange', ()=>{
 window.addEventListener('pagehide', ()=>{ flushSave(); });
 
 // ---------------- 리포트 텍스트 ----------------
-function buildReportText(dateStr, visits){
+function buildReportText(dateStr, visits, period){
   const lines = [];
-  lines.push('방문일지 '+dateStr+' ('+weekdayKR(dateStr)+')');
+  const periodTag = period ? ' ['+PERIOD_LABEL[period]+']' : '';
+  lines.push('방문일지 '+dateStr+' ('+weekdayKR(dateStr)+')'+periodTag);
   lines.push('='.repeat(28));
   let count = 0;
   visits.forEach((v, i)=>{
@@ -1200,7 +1280,7 @@ function buildReportText(dateStr, visits){
 }
 
 // ---------------- HTML 리포트 (보기용 웹 페이지 + 데이터 내장) ----------------
-function buildReportHtml(dateStr, visits){
+function buildReportHtml(dateStr, visits, period){
   const esc = (s)=>escapeHtml(String(s||''));
   const row = (k, val)=>'<div class="r"><div class="k">'+k+'</div><div class="v">'+esc(val||'-')+'</div></div>';
   let count = 0;
@@ -1222,10 +1302,11 @@ function buildReportHtml(dateStr, visits){
     ? '<p class="empty">입력된 방문 기록이 없습니다</p>'
     : cards.join('\n');
   // 데이터를 파일 안에 내장 → 앱의 '불러오기'로 이 파일을 열면 기록 복원 가능
-  const dataJson = JSON.stringify({ date: dateStr, visits: visits }).replace(/</g, '\\u003c');
+  const dataJson = JSON.stringify({ date: dateStr, period: period||null, visits: visits }).replace(/</g, '\\u003c');
+  const periodTag = period ? ' [' + PERIOD_LABEL[period] + ']' : '';
   return '<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n'
     + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-    + '<title>방문일지 ' + esc(dateStr) + '</title>\n'
+    + '<title>방문일지 ' + esc(dateStr) + esc(periodTag) + '</title>\n'
     + '<style>\n'
     + 'body{margin:0;background:#f5f1e8;color:#22291f;font-family:\'Noto Sans KR\',\'Malgun Gothic\',sans-serif;}\n'
     + 'main{max-width:520px;margin:0 auto;padding:20px 16px 40px;}\n'
@@ -1243,7 +1324,7 @@ function buildReportHtml(dateStr, visits){
     + 'footer{margin-top:18px;font-size:11.5px;color:#8a8f80;text-align:center;line-height:1.6;}\n'
     + '@media print{body{background:#fff;}.card{border:1px solid #999;break-inside:avoid;}}\n'
     + '</style>\n</head>\n<body>\n<main>\n'
-    + '<header><h1>방문일지</h1><div class="meta">' + esc(dateStr) + ' (' + weekdayKR(dateStr) + ') · 총 ' + count + '건</div></header>\n'
+    + '<header><h1>방문일지</h1><div class="meta">' + esc(dateStr) + ' (' + weekdayKR(dateStr) + ')' + esc(periodTag) + ' · 총 ' + count + '건</div></header>\n'
     + body + '\n'
     + '<footer>방문일지 앱에서 저장한 파일입니다.<br>앱의 [불러오기]에서 이 파일을 선택하면 기록이 그대로 복원됩니다.</footer>\n'
     + '</main>\n'
@@ -1264,6 +1345,8 @@ function extractReportHtmlJson(text){
 function parseReportText(text){
   const dateMatch = text.match(/방문일지\s+(\d{4}-\d{2}-\d{2})/);
   const parsedDate = dateMatch ? dateMatch[1] : null;
+  const periodMatch = text.match(/\[(오전|오후)\]/);
+  const parsedPeriod = periodMatch ? (periodMatch[1] === '오전' ? 'AM' : 'PM') : null;
   const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1); // [num, body, num, body, ...]
   let maxNum = DEFAULT_VISIT_COUNT;
   for(let i=0; i<blocks.length-1; i+=2){
@@ -1291,15 +1374,15 @@ function parseReportText(text){
       visitor: get('방문담당자명').slice(0, LIMITS.visitor),
     };
   }
-  return { date: parsedDate, visits, hasData: hasAnyData(visits) };
+  return { date: parsedDate, period: parsedPeriod, visits, hasData: hasAnyData(visits) };
 }
 
 // ---------------- 저장 (다운로드 폴더에 바로 저장) ----------------
 async function doShare(){
   await flushSave();
-  const html = buildReportHtml(currentDate, currentVisits);
+  const html = buildReportHtml(currentDate, currentVisits, currentPeriod);
   // 파일명에 저장 시각(시분) 포함 → 누를 때마다 새 파일, 덮어쓰기 없음
-  const filename = '방문일지_'+currentDate+'_'+nowHHMM()+'.html';
+  const filename = '방문일지_'+currentDate+'_'+PERIOD_LABEL[currentPeriod]+'_'+nowHHMM()+'.html';
   // 공유 시트(1개 항목 선택 → 파일관리자에서 수동 저장)를 거치지 않고
   // 바로 다운로드 폴더에 저장되도록 다운로드 방식만 사용.
   downloadFile(filename, html, 'text/html');
@@ -1326,7 +1409,7 @@ async function doImport(file){
     return;
   }
 
-  let date = null, visits = emptyVisits(), hasData = false;
+  let date = null, period = null, visits = emptyVisits(), hasData = false;
   try{
     const trimmed = text.trim();
     const isJsonName = /\.json$/i.test(file.name || '');
@@ -1338,6 +1421,7 @@ async function doImport(file){
       visits = normalizeVisits(d.visits);
       hasData = hasAnyData(visits);
       date = (d.date && DATE_KEY_RE.test(d.date)) ? d.date : null;
+      period = (d.period === 'AM' || d.period === 'PM') ? d.period : null;
     } else if(isJsonName || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
       // JSON 저장 파일 (앱/웹의 내부 저장 형식)
       const parsed = JSON.parse(trimmed);
@@ -1348,7 +1432,7 @@ async function doImport(file){
     } else {
       // 텍스트 리포트 파일
       const r = parseReportText(text);
-      date = r.date; visits = r.visits; hasData = r.hasData;
+      date = r.date; period = r.period; visits = r.visits; hasData = r.hasData;
     }
   }catch(e){
     showToast('파일 내용을 해석하지 못했습니다');
@@ -1362,13 +1446,15 @@ async function doImport(file){
 
   await flushSave();
   if(date && DATE_KEY_RE.test(date)) currentDate = date;
+  if(period) currentPeriod = period;
   currentVisits = visits;
   $('dateInput').value = currentDate;
   $('weekdayLabel').textContent = weekdayKR(currentDate);
+  updatePeriodUI();
   renderCards();
   await saveCurrent();
   switchTab('day');
-  showToast(currentDate+' 기록을 불러왔습니다');
+  showToast(currentDate+' ('+PERIOD_LABEL[currentPeriod]+') 기록을 불러왔습니다');
 }
 
 $('importBtn').addEventListener('click', ()=>{ $('importFile').click(); });
@@ -1381,7 +1467,7 @@ $('importFile').addEventListener('change', (e)=>{
 // ---------------- 복사 ----------------
 async function doCopy(){
   await flushSave();
-  const text = buildReportText(currentDate, currentVisits);
+  const text = buildReportText(currentDate, currentVisits, currentPeriod);
   try{
     await navigator.clipboard.writeText(text);
     showToast('클립보드에 복사했습니다');
@@ -1477,8 +1563,8 @@ async function deriveShareKey(pin, saltBytes){
     ['encrypt','decrypt']
   );
 }
-async function encodeShareData(dateStr, visits, pin){
-  const payload = JSON.stringify({ d: dateStr, v: visits });
+async function encodeShareData(dateStr, visits, pin, period){
+  const payload = JSON.stringify({ d: dateStr, p: period||null, v: visits });
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveShareKey(pin, salt);
@@ -1499,7 +1585,7 @@ async function decodeShareData(encoded, pin){
     const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ciphertext);
     const json = new TextDecoder().decode(plainBuf);
     const obj = JSON.parse(json);
-    return { date: obj.d, visits: normalizeVisits(obj.v) };
+    return { date: obj.d, period: (obj.p==='AM'||obj.p==='PM') ? obj.p : null, visits: normalizeVisits(obj.v) };
   }catch(e){ return null; } // 잠금번호가 틀렸거나 손상된 데이터
 }
 
@@ -1587,7 +1673,7 @@ async function doShareCode(){
 
   let encoded;
   try{
-    encoded = await encodeShareData(currentDate, currentVisits, pinTrim);
+    encoded = await encodeShareData(currentDate, currentVisits, pinTrim, currentPeriod);
   }catch(e){
     showToast('암호화 중 오류가 발생했습니다');
     return;
@@ -1667,8 +1753,9 @@ async function doImportCode(){
 
   // 잠금번호가 맞아도, 실수로 현재 화면 내용을 덮어쓰지 않도록 한 번 더 확인
   const cnt = countFilled(decoded.visits);
+  const periodLabel = decoded.period ? ' ('+PERIOD_LABEL[decoded.period]+')' : '';
   const ok = await showConfirmModal(
-    (decoded.date || '(날짜 미상)') + ' 기록 ' + cnt + '건을 불러올까요?\n'
+    (decoded.date || '(날짜 미상)') + periodLabel + ' 기록 ' + cnt + '건을 불러올까요?\n'
     + '현재 화면에 보이는 내용은 이 기록으로 대체됩니다.'
   );
   if(!ok){
@@ -1678,9 +1765,11 @@ async function doImportCode(){
 
   await flushSave();
   if(decoded.date && DATE_KEY_RE.test(decoded.date)) currentDate = decoded.date;
+  if(decoded.period) currentPeriod = decoded.period;
   currentVisits = decoded.visits;
   $('dateInput').value = currentDate;
   $('weekdayLabel').textContent = weekdayKR(currentDate);
+  updatePeriodUI();
   renderCards();
   await saveCurrent();
   switchTab('day');
@@ -1737,10 +1826,12 @@ async function doSearch(){
   try{
     const res = await storage.list('visit-log:');
     const keys = (res && res.keys ? res.keys : [])
-      .filter(k => DATE_KEY_RE.test(k.replace('visit-log:','')))
-      .sort().reverse(); // 최신 날짜부터
+      .filter(k => DATE_KEY_FULL_RE.test(k))
+      .sort().reverse(); // 최신 날짜부터 (같은 날짜면 오후→오전 순으로 뒤집힘, 아래서 date+period로 다시 정렬)
     for(const k of keys){
-      const dateStr = k.replace('visit-log:','');
+      const m = k.match(DATE_KEY_FULL_RE);
+      const dateStr = m[1];
+      const period = m[2] || 'AM'; // 접미사 없으면 v19 이전 레거시 = 오전 취급
       let visits = emptyVisits();
       try{
         const r = await storage.get(k);
@@ -1757,10 +1848,11 @@ async function doSearch(){
           }
         });
         if(matched.length > 0){
-          results.push({ date: dateStr, idx: idx, visit: v, matched: matched });
+          results.push({ date: dateStr, period: period, idx: idx, visit: v, matched: matched });
         }
       });
     }
+    results.sort((a,b) => (a.date+a.period < b.date+b.period ? 1 : -1));
   }catch(e){
     showToast('검색 중 오류가 발생했습니다');
     return;
@@ -1793,7 +1885,7 @@ function renderSearchResults(query, results, scopeLabel){
       '<div class="card-head">'
       + '<div class="stub-num">' + (r.idx+1) + '</div>'
       + '<div class="result-head-main">'
-      +   '<div class="result-date">' + r.date + ' (' + weekdayKR(r.date) + ') · 방문 ' + (r.idx+1) + ' / 4</div>'
+      +   '<div class="result-date">' + r.date + ' (' + weekdayKR(r.date) + ') · ' + PERIOD_LABEL[r.period] + ' · 방문 ' + (r.idx+1) + ' / 4</div>'
       +   '<div class="result-visitor">' + highlight(v.visitor || '(담당자 없음)', query) + '</div>'
       + '</div>'
       + '</div>'
@@ -1809,9 +1901,9 @@ function renderSearchResults(query, results, scopeLabel){
     // 결과 카드를 누르면 해당 날짜의 기록으로 이동
     card.addEventListener('click', async ()=>{
       await flushSave();
-      loadDate(r.date);
+      loadDate(r.date, r.period);
       clearSearch();
-      showToast(r.date + ' 기록으로 이동했습니다');
+      showToast(r.date + ' (' + PERIOD_LABEL[r.period] + ') 기록으로 이동했습니다');
     });
     wrap.appendChild(card);
   });
@@ -1857,11 +1949,7 @@ async function renderHistory(){
   try{
     const res = await storage.list('visit-log:');
     const keys = (res && res.keys ? res.keys : [])
-      .filter(k => {
-        if(k === SETTINGS_KEY || k === BACKUP_KEY || k === 'visit-log:dates') return false;
-        const dateStr = k.replace('visit-log:','');
-        return DATE_KEY_RE.test(dateStr); // 깨진 키 제외
-      })
+      .filter(k => DATE_KEY_FULL_RE.test(k)) // 깨진 키(설정/백업 등) 제외
       .sort().reverse();
     if(keys.length === 0){
       listEl.innerHTML = '<div class="empty">저장된 기록이 없습니다</div>';
@@ -1869,8 +1957,11 @@ async function renderHistory(){
     }
     listEl.innerHTML = '';
     let shown = 0;
+    const rows = [];
     for(const k of keys){
-      const dateStr = k.replace('visit-log:','');
+      const m = k.match(DATE_KEY_FULL_RE);
+      const dateStr = m[1];
+      const period = m[2] || 'AM'; // 접미사 없으면 v19 이전 레거시 = 오전 취급
       let visits = emptyVisits();
       try{
         const r = await storage.get(k);
@@ -1879,19 +1970,23 @@ async function renderHistory(){
       }catch(e){ continue; }
       const filled = countFilled(visits);
       if(filled === 0) continue;
+      rows.push({ dateStr, period, filled });
+    }
+    rows.sort((a,b) => (a.dateStr+a.period < b.dateStr+b.period ? 1 : -1));
+    rows.forEach(({dateStr, period, filled}) => {
       shown++;
       const item = document.createElement('div');
       item.className = 'hist-item';
-      item.innerHTML = '<div><div class="hist-date">'+dateStr+'</div>'
+      item.innerHTML = '<div><div class="hist-date">'+dateStr+' · '+PERIOD_LABEL[period]+'</div>'
         + '<div class="hist-meta">'+weekdayKR(dateStr)+'</div></div>'
         + '<div class="hist-count">'+filled+'건</div>';
       item.addEventListener('click', async ()=>{
         await flushSave();
-        loadDate(dateStr);
+        loadDate(dateStr, period);
         switchTab('day');
       });
       listEl.appendChild(item);
-    }
+    });
     if(shown === 0){
       listEl.innerHTML = '<div class="empty">저장된 기록이 없습니다</div>';
     }
@@ -1926,8 +2021,16 @@ $('nextDay').addEventListener('click', ()=>shiftDate(1));
 $('dateInput').addEventListener('change', async (e)=>{
   if(e.target.value && DATE_KEY_RE.test(e.target.value)){
     await flushSave();
-    loadDate(e.target.value);
+    loadDate(e.target.value, currentPeriod);
   }
+});
+document.querySelectorAll('.period-btn').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    const p = btn.dataset.period;
+    if(p === currentPeriod) return;
+    await flushSave();
+    loadDate(currentDate, p);
+  });
 });
 $('tabDay').addEventListener('click', async ()=>{ await flushSave(); switchTab('day'); });
 $('tabHistory').addEventListener('click', async ()=>{ await flushSave(); switchTab('history'); });
