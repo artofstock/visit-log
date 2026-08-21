@@ -12,8 +12,29 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v22
+  방문일지 (Visit Log) v23
   =========================
+  v22 → v23 개선 사항:
+  1. (보안) 불러오기(파일 불러오기)를 통한 저장형 XSS 취약점 수정:
+     - 카드 화면의 "방문시각" 표시가 innerHTML 템플릿에 이스케이프 없이
+       삽입되고 있었음. 방문시각은 평소엔 앱이 자동으로 찍는 값(예: 14:03:22)
+       이라 문제가 없지만, 조작된 .txt/.json/.html 파일을 "불러오기"로
+       열면 그 안의 시각 값에 스크립트 코드가 심어져 있어도 그대로
+       실행될 수 있는 구조였음.
+     - 방문시각을 화면에 표시할 때 HTML 이스케이프 처리하도록 수정하고,
+       불러오기로 들어오는 시각 값의 길이도 제한(최대 40자)해서 원천
+       차단. 다른 항목(주소/상호/특이사항 등)은 이미 입력폼(.value)으로
+       렌더링되어 원래부터 안전했음 — 확인 완료.
+     - 빠른 검색 결과 표시는 이미 escapeHtml()로 안전하게 처리되고
+       있었음 — 별도 수정 불필요, 확인만 진행.
+  2. (점검) 하드코딩된 API 키/서버 연동 여부 전수 점검 — 주소 검색에
+     쓰는 Nominatim(OpenStreetMap)은 키가 필요 없는 공개 서비스라
+     노출될 비밀 정보 없음. v22에서 삭제한 Firebase 외에 외부 서버로
+     데이터를 보내는 코드는 없음을 확인.
+  3. (참고) 저장된 방문 기록은 기기 로컬 저장소(브라우저 저장소)에
+     암호화 없이 저장됩니다. 기기 자체의 화면 잠금이 최종 방어선이니,
+     업무용 기기에는 화면 잠금을 꼭 설정해 두시는 걸 권장합니다.
+
   v21 → v22 개선 사항:
   1. (보안) '공유코드' 기능 전체 삭제:
      - 하단 액션바의 '공유코드' 버튼 제거.
@@ -605,7 +626,7 @@
 
 <header>
   <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v22</span></div>
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v23</span></div>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <h1 id="mainTitle">오늘의 방문 기록</h1>
@@ -830,7 +851,7 @@ function normalizeVisits(parsed){
     FIELD_META.forEach(m => {
       if (typeof src[m.key] === 'string') fixed[i][m.key] = src[m.key].slice(0, m.max);
     });
-    if (typeof src.time === 'string') fixed[i].time = src.time;
+    if (typeof src.time === 'string') fixed[i].time = src.time.slice(0, 40);
     if (typeof src.order === 'string' || typeof src.order === 'number') {
       fixed[i].order = String(src.order).slice(0, 3);
     }
@@ -1059,7 +1080,7 @@ function renderCards(){
           <input type="text" inputmode="numeric" pattern="[0-9]*" class="order-input" id="order-${idx}" data-order-input maxlength="3" placeholder="-">
         </div>
         <div class="time-area">
-          <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${visit.time || '미기록'}</span>
+          <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${escapeHtml(visit.time || '미기록')}</span>
           <button type="button" class="time-btn" data-time-btn>재기록</button>
         </div>
       </div>
@@ -1511,7 +1532,7 @@ function parseReportText(text){
       return v === '-' ? '' : v;
     };
     visits[num-1] = {
-      time: get('방문시각'),
+      time: get('방문시각').slice(0, 40),
       addr: get('주소').slice(0, LIMITS.addr),
       name: get('상호').slice(0, LIMITS.name),
       changed: get('변경상호').slice(0, LIMITS.changed),
