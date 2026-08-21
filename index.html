@@ -12,8 +12,20 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v21
+  방문일지 (Visit Log) v22
   =========================
+  v21 → v22 개선 사항:
+  1. (보안) '공유코드' 기능 전체 삭제:
+     - 하단 액션바의 '공유코드' 버튼 제거.
+     - 관련 Firebase(Firestore) 연동 코드, 6자리 코드 생성/조회, PIN
+       암호화(AES-GCM) 로직을 전부 삭제. 앱이 더 이상 외부 서버와
+       통신하지 않음(내비게이션 지도 앱 실행, 주소 검색 제외).
+     - 이유: 이 앱은 개인 전용으로 사용 중이며, 6자리 코드는 인증 없이
+       추측/무차별 대입으로 접근을 시도할 수 있는 구조라 악용 소지가
+       있어 기능 자체를 없앰.
+     - 저장(.html)/복사/불러오기(.txt·.json·.html) 등 기기 안에서만
+       처리되는 기존 기능은 전부 그대로 유지됨.
+
   v20 → v21 개선 사항:
   1. "메모" 탭 추가 (오전/오후 옆):
      - 오전/오후와 별개로, 날짜 하나당 최대 2000자짜리 메모장 하나가
@@ -556,7 +568,6 @@
   .actionbar button:active{ transform:translateY(1px); }
   .btn-share{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
   .btn-copy{ background:var(--card); color:var(--ink); }
-  .btn-link{ background:var(--brick); color:#fff; border-color:var(--brick); }
 
   .history{ display:none; }
   .history.show{ display:block; }
@@ -588,15 +599,13 @@
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div class="bg-texture"></div>
 
 <header>
   <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v21</span></div>
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v22</span></div>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <h1 id="mainTitle">오늘의 방문 기록</h1>
@@ -672,7 +681,7 @@
         <span class="memo-count" id="memoCharCount">0 / 2000</span>
       </div>
       <textarea id="memoText" class="memo-textarea" maxlength="2000" enterkeyhint="done"
-        placeholder="오전/오후 카드와 별개로, 하루 전체에 대한 메모를 자유롭게 적어두세요.&#10;예: 오늘 전체 요약, 특이사항, 다음 방문 시 참고할 내용 등.&#10;공유코드로 전달하면 이 메모도 함께 전송됩니다."></textarea>
+        placeholder="오전/오후 카드와 별개로, 하루 전체에 대한 메모를 자유롭게 적어두세요.&#10;예: 오늘 전체 요약, 특이사항, 다음 방문 시 참고할 내용 등.&#10;입력하면 자동으로 저장됩니다."></textarea>
     </div>
   </div>
 
@@ -684,7 +693,6 @@
 <div class="actionbar" id="actionbar">
   <button class="btn-copy" id="importBtn" type="button">불러오기</button>
   <button class="btn-copy" id="copyBtn" type="button">복사</button>
-  <button class="btn-link" id="linkShareBtn" type="button">공유코드</button>
   <button class="btn-share" id="shareBtn" type="button">저장</button>
 </div>
 <input type="file" id="importFile" accept=".txt,.json,.html,.htm,text/plain,application/json,text/html" style="display:none">
@@ -693,26 +701,6 @@
 
 <script>
 'use strict';
-
-// ===================================================================
-// Firebase 초기화 (공유코드 저장/조회용). 초기화 실패해도 앱의 나머지
-// 기능(입력/저장/파일불러오기 등)은 정상 동작해야 하므로 try/catch로 감쌈.
-// ===================================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyBXd6A6akibpmrYlSoo0Uy66A0XC-JYS6Y",
-  authDomain: "visit-log-ae7a0.firebaseapp.com",
-  projectId: "visit-log-ae7a0",
-  storageBucket: "visit-log-ae7a0.firebasestorage.app",
-  messagingSenderId: "421867417190",
-  appId: "1:421867417190:web:56df2709fd023ce7c407a7"
-};
-let fbDb = null;
-try{
-  if (window.firebase && typeof firebase.initializeApp === 'function') {
-    firebase.initializeApp(firebaseConfig);
-    fbDb = firebase.firestore();
-  }
-}catch(e){ console.error('Firebase 초기화 실패:', e); fbDb = null; }
 
 // ===================================================================
 // 저장소 어댑터 (v8 핵심 수정)
@@ -1655,312 +1643,6 @@ async function doCopy(){
     }
   }
 }
-
-// ---------------- 커스텀 입력/확인창 (설치된 PWA에서 window.prompt/confirm이
-// 동작하지 않는 경우가 있어, 브라우저 내장 팝업 대신 앱 안에 직접 만든 모달 사용) ----------------
-function showPromptModal(message, placeholder){
-  return new Promise((resolve)=>{
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML =
-      '<div class="modal-box">'
-      + '<div class="modal-msg"></div>'
-      + '<input type="text" class="modal-input" autocomplete="off" data-lpignore="true">'
-      + '<div class="modal-actions">'
-      +   '<button type="button" class="modal-cancel">취소</button>'
-      +   '<button type="button" class="modal-ok">확인</button>'
-      + '</div></div>';
-    overlay.querySelector('.modal-msg').textContent = message;
-    const input = overlay.querySelector('.modal-input');
-    if(placeholder) input.placeholder = placeholder;
-    document.body.appendChild(overlay);
-    const cleanup = (val) => { overlay.remove(); resolve(val); };
-    overlay.querySelector('.modal-cancel').addEventListener('click', ()=>cleanup(null));
-    overlay.querySelector('.modal-ok').addEventListener('click', ()=>cleanup(input.value));
-    input.addEventListener('keydown', (e)=>{
-      if(e.key === 'Enter'){ e.preventDefault(); cleanup(input.value); }
-    });
-    setTimeout(()=>input.focus(), 50);
-  });
-}
-function showConfirmModal(message){
-  return new Promise((resolve)=>{
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML =
-      '<div class="modal-box">'
-      + '<div class="modal-msg"></div>'
-      + '<div class="modal-actions">'
-      +   '<button type="button" class="modal-cancel">취소</button>'
-      +   '<button type="button" class="modal-ok">확인</button>'
-      + '</div></div>';
-    overlay.querySelector('.modal-msg').textContent = message;
-    document.body.appendChild(overlay);
-    const cleanup = (val) => { overlay.remove(); resolve(val); };
-    overlay.querySelector('.modal-cancel').addEventListener('click', ()=>cleanup(false));
-    overlay.querySelector('.modal-ok').addEventListener('click', ()=>cleanup(true));
-  });
-}
-
-// ---------------- 공유코드 (Firebase Firestore + PIN 암호화) ----------------
-// 원리: 오늘 기록(JSON)을 잠금번호(PIN)로 AES-GCM 암호화(브라우저 내장 Web Crypto
-// API, 외부 라이브러리 없음)한 뒤, 그 암호문을 Firestore에 저장하고 6자리 코드를
-// 발급함. 코드만 알아도 잠금번호를 모르면 내용을 볼 수 없어 이중으로 보호됨.
-// 코드는 24시간 후 만료(클라이언트에서 확인).
-function toBase64Url(bytes){
-  let binary = '';
-  bytes.forEach((b) => { binary += String.fromCharCode(b); });
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function fromBase64Url(str){
-  let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  while(b64.length % 4) b64 += '=';
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-async function deriveShareKey(pin, saltBytes){
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    { name:'PBKDF2', salt: saltBytes, iterations: 100000, hash:'SHA-256' },
-    baseKey,
-    { name:'AES-GCM', length:256 },
-    false,
-    ['encrypt','decrypt']
-  );
-}
-async function encodeShareData(dateStr, visits, pin, period, memo){
-  const payload = JSON.stringify({ d: dateStr, p: period||null, v: visits, m: memo||'' });
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveShareKey(pin, salt);
-  const cipherBuf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(payload));
-  const combined = new Uint8Array(salt.length + iv.length + cipherBuf.byteLength);
-  combined.set(salt, 0);
-  combined.set(iv, salt.length);
-  combined.set(new Uint8Array(cipherBuf), salt.length + iv.length);
-  return toBase64Url(combined);
-}
-async function decodeShareData(encoded, pin){
-  try{
-    const combined = fromBase64Url(encoded);
-    const salt = combined.slice(0, 16);
-    const iv = combined.slice(16, 28);
-    const ciphertext = combined.slice(28);
-    const key = await deriveShareKey(pin, salt);
-    const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ciphertext);
-    const json = new TextDecoder().decode(plainBuf);
-    const obj = JSON.parse(json);
-    return { date: obj.d, period: (obj.p==='AM'||obj.p==='PM') ? obj.p : null, visits: normalizeVisits(obj.v), memo: (typeof obj.m === 'string') ? obj.m : '' };
-  }catch(e){ return null; } // 잠금번호가 틀렸거나 손상된 데이터
-}
-
-function generateSixDigitCode(){
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function showCodeResultModal(code){
-  return new Promise((resolve)=>{
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML =
-      '<div class="modal-box">'
-      + '<div class="modal-msg">공유 코드가 생성되었습니다.\n이 번호를 상대방에게 전달하세요.\n(24시간 후 자동 만료 · 잠금번호는 별도 전달)</div>'
-      + '<div class="modal-code">' + code + '</div>'
-      + '<div class="modal-actions">'
-      +   '<button type="button" class="modal-cancel" id="modalCodeClose">닫기</button>'
-      +   '<button type="button" class="modal-ok" id="modalCodeCopy">코드 복사</button>'
-      + '</div></div>';
-    document.body.appendChild(overlay);
-    overlay.querySelector('#modalCodeCopy').addEventListener('click', async ()=>{
-      try{
-        await navigator.clipboard.writeText(code);
-        showToast('코드가 복사되었습니다');
-      }catch(e){
-        showToast('복사 실패 — 직접 적어서 전달해주세요');
-      }
-    });
-    overlay.querySelector('#modalCodeClose').addEventListener('click', ()=>{ overlay.remove(); resolve(); });
-  });
-}
-
-function showChoiceModal(message, choices){
-  return new Promise((resolve)=>{
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    const btnsHtml = choices.map((c, i) =>
-      '<button type="button" class="modal-ok modal-choice" data-i="' + i + '">' + c.label + '</button>'
-    ).join('');
-    overlay.innerHTML =
-      '<div class="modal-box">'
-      + '<div class="modal-msg"></div>'
-      + '<div class="modal-actions modal-actions-col">' + btnsHtml + '</div>'
-      + '<div class="modal-actions"><button type="button" class="modal-cancel" id="modalChoiceCancel">닫기</button></div>'
-      + '</div>';
-    overlay.querySelector('.modal-msg').textContent = message;
-    document.body.appendChild(overlay);
-    overlay.querySelectorAll('.modal-choice').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const i = parseInt(btn.dataset.i, 10);
-        overlay.remove();
-        resolve(choices[i].value);
-      });
-    });
-    overlay.querySelector('#modalChoiceCancel').addEventListener('click', () => { overlay.remove(); resolve(null); });
-  });
-}
-
-async function doShareCode(){
-  await flushSave();
-  if(!hasAnyData(currentVisits) && !currentMemo.trim()){
-    showToast('공유할 기록이 없습니다');
-    return;
-  }
-  if(!(window.crypto && window.crypto.subtle)){
-    showToast('이 브라우저에서는 암호화 공유를 지원하지 않습니다 (HTTPS 필요)');
-    return;
-  }
-  if(!fbDb){
-    showToast('공유 서버에 연결할 수 없습니다 (인터넷 연결을 확인해주세요)');
-    return;
-  }
-  const pin = await showPromptModal(
-    '공유 코드 잠금번호를 정해주세요 (4자리 이상 숫자/문자).\n'
-    + '받는 분께는 이 번호를 별도(전화, 문자 등)로 알려주셔야\n'
-    + '엉뚱한 사람이 코드를 알아도 내용이 보이지 않습니다.',
-    '잠금번호 입력'
-  );
-  if(pin === null) return; // 취소
-  const pinTrim = pin.trim();
-  if(pinTrim.length < 4){
-    showToast('잠금번호는 4자리 이상 입력해야 합니다');
-    return;
-  }
-
-  let encoded;
-  try{
-    encoded = await encodeShareData(currentDate, currentVisits, pinTrim, currentPeriod, currentMemo);
-  }catch(e){
-    showToast('암호화 중 오류가 발생했습니다');
-    return;
-  }
-
-  showToast('공유 코드를 생성하는 중...');
-  try{
-    let code = null;
-    for(let attempt=0; attempt<5 && !code; attempt++){
-      const candidate = generateSixDigitCode();
-      const ref = fbDb.collection('shared_routes').doc(candidate);
-      const snap = await ref.get();
-      if(snap.exists) continue; // 드물게 코드 중복이면 다시 시도
-      await ref.set({
-        payload: encoded,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        expiresAt: Date.now() + 24 * 3600 * 1000
-      });
-      code = candidate;
-    }
-    if(!code){
-      showToast('코드 생성에 실패했습니다. 다시 시도해주세요');
-      return;
-    }
-    await showCodeResultModal(code);
-  }catch(e){
-    console.error(e);
-    const detail = (e && (e.code || e.message)) ? (' ('+(e.code || e.message)+')') : '';
-    showToast('서버 연결에 실패했습니다' + detail);
-  }
-}
-
-async function doImportCode(){
-  if(!fbDb){
-    showToast('공유 서버에 연결할 수 없습니다 (인터넷 연결을 확인해주세요)');
-    return;
-  }
-  const code = await showPromptModal('전달받은 6자리 공유 코드를 입력하세요.', '예: 123456');
-  if(code === null) return;
-  const codeTrim = code.trim();
-  if(!/^\d{6}$/.test(codeTrim)){
-    showToast('공유 코드는 숫자 6자리입니다');
-    return;
-  }
-
-  showToast('코드를 확인하는 중...');
-  let snap;
-  try{
-    snap = await fbDb.collection('shared_routes').doc(codeTrim).get();
-  }catch(e){
-    console.error(e);
-    const detail = (e && (e.code || e.message)) ? (' ('+(e.code || e.message)+')') : '';
-    showToast('서버 연결에 실패했습니다' + detail);
-    return;
-  }
-  if(!snap.exists){
-    showToast('존재하지 않는 코드입니다');
-    return;
-  }
-  const data = snap.data();
-  if(data.expiresAt && Date.now() > data.expiresAt){
-    showToast('만료된 코드입니다');
-    return;
-  }
-
-  const pin = await showPromptModal('보낸 분에게 전달받은 잠금번호를 입력하세요.', '잠금번호 입력');
-  if(pin === null){
-    showToast('잠금번호를 입력하지 않아 불러오기를 취소했습니다');
-    return;
-  }
-
-  const decoded = await decodeShareData(data.payload, pin.trim());
-  if(!decoded || (!hasAnyData(decoded.visits) && !(decoded.memo && decoded.memo.trim()))){
-    showToast('잠금번호가 틀렸거나 손상된 데이터입니다');
-    return;
-  }
-
-  // 잠금번호가 맞아도, 실수로 현재 화면 내용을 덮어쓰지 않도록 한 번 더 확인
-  const cnt = countFilled(decoded.visits);
-  const periodLabel = decoded.period ? ' ('+PERIOD_LABEL[decoded.period]+')' : '';
-  const memoNote = decoded.memo && decoded.memo.trim() ? ' + 메모' : '';
-  const ok = await showConfirmModal(
-    (decoded.date || '(날짜 미상)') + periodLabel + ' 기록 ' + cnt + '건' + memoNote + '을 불러올까요?\n'
-    + '현재 화면에 보이는 내용은 이 기록으로 대체됩니다.'
-  );
-  if(!ok){
-    showToast('불러오기를 취소했습니다');
-    return;
-  }
-
-  await flushSave();
-  if(decoded.date && DATE_KEY_RE.test(decoded.date)) currentDate = decoded.date;
-  if(decoded.period) currentPeriod = decoded.period;
-  currentView = currentPeriod;
-  currentVisits = decoded.visits;
-  currentMemo = decoded.memo || '';
-  $('dateInput').value = currentDate;
-  $('weekdayLabel').textContent = weekdayKR(currentDate);
-  updatePeriodUI();
-  renderCards();
-  const ta = $('memoText');
-  if(ta) ta.value = currentMemo;
-  updateMemoCount();
-  await saveCurrent();
-  await saveMemoCurrent();
-  switchTab('day');
-  showToast(currentDate+' 공유 코드에서 기록을 불러왔습니다');
-}
-
-async function doShareCodeMenu(){
-  const choice = await showChoiceModal('공유코드로 무엇을 하시겠어요?', [
-    { label:'📤 코드 만들어 보내기', value:'send' },
-    { label:'📥 코드 입력해서 받기', value:'receive' }
-  ]);
-  if(choice === 'send') await doShareCode();
-  else if(choice === 'receive') await doImportCode();
-}
-
-$('linkShareBtn').addEventListener('click', doShareCodeMenu);
 
 // ---------------- 날짜 이동 ----------------
 async function shiftDate(deltaDays){
