@@ -12,8 +12,22 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v20
+  방문일지 (Visit Log) v21
   =========================
+  v20 → v21 개선 사항:
+  1. "메모" 탭 추가 (오전/오후 옆):
+     - 오전/오후와 별개로, 날짜 하나당 최대 2000자짜리 메모장 하나가
+       추가됨. 하루 전체에 대한 요약이나 참고사항을 자유롭게 적을 수
+       있음 (오전/오후 카드 내용과는 별도로 저장됨).
+     - 입력하면 자동 저장(0.6초 디바운스, 카드 입력과 동일한 방식).
+     - '공유코드'로 보낼 때 현재 카드 기록과 함께 메모도 같이 암호화되어
+       전달됨 — 받는 사람이 코드+잠금번호를 입력하면 메모까지 그대로
+       복원됨. 메모만 있고 카드가 비어 있어도 공유 가능.
+     - '저장'(HTML 파일)과 '복사'(텍스트)에도 메모 내용이 함께 포함됨.
+  2. 전체적인 디자인 다듬기: 카드/버튼/입력창에 부드러운 모서리와
+     은은한 그림자를 더해 화면에 입체감을 주고, 버튼 눌림 효과와
+     화면 전환에 부드러운 트랜지션을 추가해 조작감을 개선.
+
   v19 → v20 개선 사항:
   1. 오전 / 오후 기록 분리:
      - 날짜 아래에 "오전 / 오후" 탭이 추가됨. 같은 날짜라도 오전 방문과
@@ -155,34 +169,41 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper: #E9EDE7;
+    --paper: #ECF0EA;
     --paper-2: #DFE5DE;
-    --ink: #232F3B;
+    --ink: #202B36;
     --ink-soft: #56635F;
     --teal: #2F6F62;
-    --teal-dark: #204E44;
+    --teal-dark: #1B4A40;
     --teal-pale: #DCE8E2;
     --brick: #A63D40;
+    --brick-pale: #F3E1E0;
     --line: #C7CFC5;
     --card: #F5F7F3;
+    --shadow-c: rgba(27,74,64,.16);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
-    background:var(--paper);
+    background:
+      radial-gradient(1200px 500px at 50% -120px, rgba(255,255,255,.55), transparent 60%),
+      var(--paper);
     color:var(--ink);
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
     min-height:100vh;
     padding-bottom:96px;
   }
+  button, input, textarea, select{ transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, opacity .16s ease, transform .1s ease; }
   .bg-texture{
     position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
     background-image: repeating-linear-gradient(180deg, transparent, transparent 27px, var(--line) 28px);
   }
   header{
     position:relative; z-index:1;
-    padding:22px 18px 14px;
+    padding:22px 18px 16px;
     border-bottom:2px solid var(--ink);
+    background:linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0) 70%);
+    box-shadow: 0 6px 18px -12px rgba(20,30,25,.35);
   }
   .eyebrow-row{
     display:flex; align-items:center; justify-content:space-between; gap:8px;
@@ -203,6 +224,7 @@
     font-size:11px; font-weight:600; color:var(--teal-dark);
     border:1.3px solid var(--teal-dark); background:var(--teal-pale);
     padding:2px 8px; white-space:nowrap;
+    border-radius:3px;
   }
   h1{
     font-family:'Noto Serif KR','Malgun Gothic',serif;
@@ -213,18 +235,20 @@
     display:flex; align-items:center; gap:10px;
   }
   .date-nav button{
-    width:36px;height:36px; border-radius:0; border:1.5px solid var(--ink);
-    background:var(--card); color:var(--ink); font-size:16px; font-family:'IBM Plex Mono',monospace;
+    width:38px;height:38px; border-radius:8px; border:1.5px solid var(--ink);
+    background:var(--card); color:var(--ink); font-size:17px; font-family:'IBM Plex Mono',monospace;
     cursor:pointer; flex-shrink:0;
+    box-shadow: 0 2px 0 var(--shadow-c);
   }
-  .date-nav button:active{ background:var(--ink); color:var(--card); }
+  .date-nav button:active{ background:var(--ink); color:var(--card); transform:translateY(1px); box-shadow:none; }
   .date-display{
     flex:1; min-width:0;
     font-family:'IBM Plex Mono',monospace;
     font-size:15px; font-weight:600;
     border:1.5px solid var(--ink); background:var(--card);
-    padding:8px 10px; text-align:center;
+    padding:8px 10px; text-align:center; border-radius:8px;
     display:flex; align-items:center; justify-content:center; gap:8px;
+    box-shadow: 0 2px 0 var(--shadow-c);
   }
   .date-display input[type=date]{
     border:none; background:transparent; font-family:'IBM Plex Mono',monospace;
@@ -233,39 +257,66 @@
   .weekday{ color:var(--teal-dark); flex-shrink:0; }
 
   .period-toggle{
-    display:flex; border:1.5px solid var(--ink); margin-top:8px; overflow:hidden;
+    display:flex; gap:6px; margin-top:10px;
   }
   .period-btn{
-    flex:1; border:none; background:var(--card); color:var(--ink);
+    flex:1; border:1.5px solid var(--ink); border-radius:8px; background:var(--card); color:var(--ink);
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-weight:700;
     font-size:14px; padding:9px 4px; cursor:pointer;
   }
-  .period-btn + .period-btn{ border-left:1.5px solid var(--ink); }
-  .period-btn.active{ background:var(--teal-dark); color:#fff; }
+  .period-btn.active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; box-shadow: 0 3px 0 var(--shadow-c); transform:translateY(-1px); }
+  .period-btn.memo-btn.active{ background:var(--brick); border-color:var(--brick); box-shadow: 0 3px 0 rgba(166,61,64,.28); }
   .period-btn .period-count{
     font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:11.5px;
-    opacity:.8; margin-left:4px;
+    opacity:.85; margin-left:4px;
   }
 
   main{ position:relative; z-index:1; padding:16px; }
+
+  .memo-panel{
+    background:var(--card); border:1.5px solid var(--ink); border-radius:8px;
+    box-shadow: 3px 3px 0 var(--line);
+    padding:14px; margin-bottom:16px;
+  }
+  .memo-panel.hide{ display:none; }
+  #visitsPanel.hide{ display:none; }
+  .memo-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .memo-label{
+    font-family:'Noto Serif KR','Malgun Gothic',serif; font-weight:700; font-size:15px;
+    color:var(--brick);
+  }
+  .memo-count{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
+  }
+  .memo-count.warn{ color:var(--brick); font-weight:600; }
+  .memo-textarea{
+    width:100%; min-height:280px; resize:vertical;
+    border:1.3px solid var(--line); border-radius:6px; background:#fff;
+    padding:12px; font-size:14.5px; line-height:1.6;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
+  }
+  .memo-textarea:focus{ outline:none; border-color:var(--brick); }
 
   .search-bar{
     display:flex; gap:8px; margin-bottom:16px;
   }
   .search-bar input{
-    flex:1; min-width:0; border:1.5px solid var(--ink); background:#fff;
+    flex:1; min-width:0; border:1.5px solid var(--ink); border-radius:8px; background:#fff;
     padding:10px 12px; font-size:14px;
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
   }
   .search-bar input:focus{ outline:none; border-color:var(--teal); }
   .search-bar button{
     padding:10px 16px; font-size:13.5px; font-weight:700; cursor:pointer;
-    border:1.5px solid var(--teal-dark); background:var(--teal-dark); color:#fff;
+    border:1.5px solid var(--teal-dark); border-radius:8px; background:var(--teal-dark); color:#fff;
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif; white-space:nowrap;
     flex-shrink:0;
   }
   .search-bar select{
-    flex-shrink:0; border:1.5px solid var(--ink); background:#fff;
+    flex-shrink:0; border:1.5px solid var(--ink); border-radius:8px; background:#fff;
     padding:10px 4px; font-size:13px;
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
   }
@@ -309,22 +360,24 @@
     display:flex; gap:8px; margin-bottom:16px;
   }
   .toolbar button{
-    flex:1; padding:9px 6px; font-size:12.5px; font-weight:500;
-    border:1.5px solid var(--ink); background:var(--card); color:var(--ink);
+    flex:1; padding:10px 6px; font-size:12.5px; font-weight:600;
+    border:1.5px solid var(--ink); border-radius:8px; background:var(--card); color:var(--ink);
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif; cursor:pointer;
   }
-  .toolbar button.active{ background:var(--ink); color:var(--paper); }
+  .toolbar button.active{ background:var(--ink); color:var(--paper); box-shadow: 0 2px 0 var(--shadow-c); }
 
   .card{
     background:var(--card);
     border:1.5px solid var(--ink);
+    border-radius:8px;
     margin-bottom:16px;
     position:relative;
+    overflow:hidden;
     box-shadow: 3px 3px 0 var(--line);
   }
   .add-card-btn{
     display:block; width:100%; box-sizing:border-box;
-    padding:14px; margin-bottom:24px;
+    padding:14px; margin-bottom:24px; border-radius:8px;
     background:var(--card); color:var(--teal-dark);
     border:1.5px dashed var(--teal-dark);
     font-size:14px; font-weight:700; cursor:pointer;
@@ -492,13 +545,15 @@
     display:flex; gap:8px;
     padding:12px 14px calc(12px + env(safe-area-inset-bottom));
     background:var(--paper); border-top:2px solid var(--ink);
+    box-shadow: 0 -6px 18px -12px rgba(20,30,25,.35);
   }
   .actionbar button{
     flex:1; padding:13px 4px; font-size:13px; font-weight:700;
-    border:1.5px solid var(--ink); cursor:pointer;
+    border:1.5px solid var(--ink); border-radius:8px; cursor:pointer;
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
     white-space:nowrap;
   }
+  .actionbar button:active{ transform:translateY(1px); }
   .btn-share{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
   .btn-copy{ background:var(--card); color:var(--ink); }
   .btn-link{ background:var(--brick); color:#fff; border-color:var(--brick); }
@@ -507,15 +562,15 @@
   .history.show{ display:block; }
   .hist-item{
     display:flex; justify-content:space-between; align-items:center;
-    padding:12px 14px; background:var(--card); border:1.3px solid var(--line);
+    padding:12px 14px; background:var(--card); border:1.3px solid var(--line); border-radius:8px;
     margin-bottom:8px; cursor:pointer;
   }
-  .hist-item:active{ border-color:var(--ink); }
+  .hist-item:active{ border-color:var(--ink); background:var(--paper-2); }
   .hist-date{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13.5px; }
   .hist-meta{ font-size:12px; color:var(--ink-soft); }
   .hist-count{
     font-family:'IBM Plex Mono',monospace; font-size:11px;
-    border:1px solid var(--teal-dark); color:var(--teal-dark);
+    border:1px solid var(--teal-dark); color:var(--teal-dark); border-radius:4px;
     padding:2px 7px;
   }
   .empty{
@@ -541,7 +596,7 @@
 
 <header>
   <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v20</span></div>
+    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v21</span></div>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <h1 id="mainTitle">오늘의 방문 기록</h1>
@@ -554,8 +609,9 @@
     <button id="nextDay" type="button">›</button>
   </div>
   <div class="period-toggle" id="periodToggle">
-    <button type="button" class="period-btn" data-period="AM">오전<span class="period-count" id="periodCountAM"></span></button>
-    <button type="button" class="period-btn" data-period="PM">오후<span class="period-count" id="periodCountPM"></span></button>
+    <button type="button" class="period-btn" data-view="AM">오전<span class="period-count" id="periodCountAM"></span></button>
+    <button type="button" class="period-btn" data-view="PM">오후<span class="period-count" id="periodCountPM"></span></button>
+    <button type="button" class="period-btn memo-btn" data-view="MEMO">메모<span class="period-count" id="memoCount"></span></button>
   </div>
 </header>
 
@@ -601,12 +657,23 @@
         <button type="button" class="nav-pref-btn" data-nav="naver">네이버맵</button>
       </div>
     </div>
-    <div class="sort-row">
-      <div class="hint">각 카드의 <b>순서</b> 칸에 방문 순서를 적고<br>정렬하면 그 순서대로 카드가 재배열돼요</div>
-      <button type="button" id="sortByOrderBtn" class="sort-btn">↓ 순서대로 정렬</button>
+    <div id="visitsPanel">
+      <div class="sort-row">
+        <div class="hint">각 카드의 <b>순서</b> 칸에 방문 순서를 적고<br>정렬하면 그 순서대로 카드가 재배열돼요</div>
+        <button type="button" id="sortByOrderBtn" class="sort-btn">↓ 순서대로 정렬</button>
+      </div>
+      <div id="cardsWrap"></div>
+      <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
     </div>
-    <div id="cardsWrap"></div>
-    <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
+
+    <div id="memoPanel" class="memo-panel hide">
+      <div class="memo-head">
+        <span class="memo-label">오늘의 메모</span>
+        <span class="memo-count" id="memoCharCount">0 / 2000</span>
+      </div>
+      <textarea id="memoText" class="memo-textarea" maxlength="2000" enterkeyhint="done"
+        placeholder="오전/오후 카드와 별개로, 하루 전체에 대한 메모를 자유롭게 적어두세요.&#10;예: 오늘 전체 요약, 특이사항, 다음 방문 시 참고할 내용 등.&#10;공유코드로 전달하면 이 메모도 함께 전송됩니다."></textarea>
+    </div>
   </div>
 
   <div id="historyView" class="history">
@@ -713,8 +780,14 @@ function defaultPeriod(){
   return new Date().getHours() < 12 ? 'AM' : 'PM';
 }
 
+const MEMO_MAX = 2000;
+function memoKeyFor(dateStr){ return 'visit-log:memo:'+dateStr; }
+
 let currentDate = todayStr();
 let currentPeriod = defaultPeriod();
+let currentView = currentPeriod; // 'AM' | 'PM' | 'MEMO' — 화면에 보이는 탭
+let currentMemo = '';
+let memoSaveTimer = null;
 let currentVisits = emptyVisits();
 let saveTimer = null;
 let backupIntervalId = null;
@@ -804,7 +877,7 @@ function showToast(msg){
 
 async function loadDate(dateStr, period){
   currentDate = dateStr;
-  if(period) currentPeriod = period;
+  if(period){ currentPeriod = period; currentView = period; }
   $('dateInput').value = dateStr;
   $('weekdayLabel').textContent = weekdayKR(dateStr);
   updatePeriodUI();
@@ -823,15 +896,31 @@ async function loadDate(dateStr, period){
   renderCards();
   const filled = countFilled(currentVisits);
   $('lastSaved').textContent = filled > 0 ? '기록 '+filled+'곳 있음' : '—';
+  await loadMemo(dateStr);
   refreshPeriodCounts();
 }
 
 function updatePeriodUI(){
   document.querySelectorAll('.period-btn').forEach(btn=>{
-    btn.classList.toggle('active', btn.dataset.period === currentPeriod);
+    btn.classList.toggle('active', btn.dataset.view === currentView);
   });
+  const visitsPanel = $('visitsPanel');
+  const memoPanel = $('memoPanel');
+  if(visitsPanel && memoPanel){
+    if(currentView === 'MEMO'){
+      visitsPanel.classList.add('hide');
+      memoPanel.classList.remove('hide');
+    } else {
+      visitsPanel.classList.remove('hide');
+      memoPanel.classList.add('hide');
+    }
+  }
   const title = $('mainTitle');
-  if(title) title.textContent = (currentPeriod === 'AM' ? '오전' : '오후') + ' 방문 기록';
+  if(title){
+    title.textContent = currentView === 'MEMO'
+      ? '오늘의 메모'
+      : (currentView === 'AM' ? '오전' : '오후') + ' 방문 기록';
+  }
 }
 
 // 오전/오후 탭 버튼에 각 기록 건수를 작게 표시 (참고용, 매번 저장소 조회)
@@ -849,7 +938,61 @@ async function refreshPeriodCounts(){
       el.textContent = filled > 0 ? ' '+filled : '';
     }catch(e){ el.textContent = ''; }
   }
+  const memoEl = $('memoCount');
+  if(memoEl) memoEl.textContent = currentMemo.trim() ? ' ✓' : '';
 }
+
+// ---------------- 메모 (v21, 오전/오후와 별개로 하루 단위 저장) ----------------
+async function loadMemo(dateStr){
+  try{
+    const res = await storage.get(memoKeyFor(dateStr));
+    currentMemo = res && res.value ? res.value : '';
+  }catch(e){
+    currentMemo = '';
+  }
+  const ta = $('memoText');
+  if(ta) ta.value = currentMemo;
+  updateMemoCount();
+}
+
+function updateMemoCount(){
+  const el = $('memoCharCount');
+  if(el){
+    el.textContent = currentMemo.length + ' / ' + MEMO_MAX;
+    el.classList.toggle('warn', currentMemo.length >= MEMO_MAX - 100);
+  }
+  const memoEl = $('memoCount');
+  if(memoEl) memoEl.textContent = currentMemo.trim() ? ' ✓' : '';
+}
+
+function scheduleMemoSave(){
+  clearTimeout(memoSaveTimer);
+  memoSaveTimer = setTimeout(()=>{
+    memoSaveTimer = null;
+    saveMemoCurrent();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+async function saveMemoCurrent(){
+  try{
+    await storage.set(memoKeyFor(currentDate), currentMemo);
+    $('lastSaved').textContent = '저장됨 ' + nowHHMMSS().slice(0,5);
+  }catch(e){ /* 조용히 무시, 다음 저장 때 재시도 */ }
+}
+
+async function flushMemoSave(){
+  if(memoSaveTimer){
+    clearTimeout(memoSaveTimer);
+    memoSaveTimer = null;
+  }
+  await saveMemoCurrent();
+}
+
+$('memoText') && $('memoText').addEventListener('input', (e)=>{
+  currentMemo = e.target.value.slice(0, MEMO_MAX);
+  updateMemoCount();
+  scheduleMemoSave();
+});
 
 function countFilled(visits){
   return visits.filter(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor).length;
@@ -1211,6 +1354,7 @@ async function flushSave(){
     saveTimer = null;
   }
   await saveCurrent();
+  await flushMemoSave();
 }
 
 // ---------------- 5분 자동 임시저장 (기기 내부, 조용히) ----------------
@@ -1257,7 +1401,7 @@ document.addEventListener('visibilitychange', ()=>{
 window.addEventListener('pagehide', ()=>{ flushSave(); });
 
 // ---------------- 리포트 텍스트 ----------------
-function buildReportText(dateStr, visits, period){
+function buildReportText(dateStr, visits, period, memo){
   const lines = [];
   const periodTag = period ? ' ['+PERIOD_LABEL[period]+']' : '';
   lines.push('방문일지 '+dateStr+' ('+weekdayKR(dateStr)+')'+periodTag);
@@ -1276,11 +1420,17 @@ function buildReportText(dateStr, visits, period){
     lines.push('방문담당자명: '+(v.visitor||'-'));
   });
   if(count===0){ lines.push(''); lines.push('(입력된 방문 기록 없음)'); }
+  if(memo && memo.trim()){
+    lines.push('');
+    lines.push('-'.repeat(28));
+    lines.push('[메모]');
+    lines.push(memo.trim());
+  }
   return lines.join('\n');
 }
 
 // ---------------- HTML 리포트 (보기용 웹 페이지 + 데이터 내장) ----------------
-function buildReportHtml(dateStr, visits, period){
+function buildReportHtml(dateStr, visits, period, memo){
   const esc = (s)=>escapeHtml(String(s||''));
   const row = (k, val)=>'<div class="r"><div class="k">'+k+'</div><div class="v">'+esc(val||'-')+'</div></div>';
   let count = 0;
@@ -1301,8 +1451,11 @@ function buildReportHtml(dateStr, visits, period){
   const body = count === 0
     ? '<p class="empty">입력된 방문 기록이 없습니다</p>'
     : cards.join('\n');
+  const memoSection = (memo && memo.trim())
+    ? '<section class="memo-card"><div class="ch">메모</div><div class="cb memo-body">' + esc(memo.trim()) + '</div></section>\n'
+    : '';
   // 데이터를 파일 안에 내장 → 앱의 '불러오기'로 이 파일을 열면 기록 복원 가능
-  const dataJson = JSON.stringify({ date: dateStr, period: period||null, visits: visits }).replace(/</g, '\\u003c');
+  const dataJson = JSON.stringify({ date: dateStr, period: period||null, visits: visits, memo: memo||'' }).replace(/</g, '\\u003c');
   const periodTag = period ? ' [' + PERIOD_LABEL[period] + ']' : '';
   return '<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n'
     + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
@@ -1321,11 +1474,15 @@ function buildReportHtml(dateStr, visits, period){
     + '.k{flex:0 0 92px;color:#5b6353;font-weight:600;}\n'
     + '.v{flex:1;word-break:break-all;white-space:pre-wrap;}\n'
     + '.empty{color:#5b6353;text-align:center;padding:30px 0;}\n'
+    + '.memo-card{background:#fffdf4;border:1.5px solid #a63d40;margin-bottom:12px;}\n'
+    + '.memo-card .ch{background:#a63d40;}\n'
+    + '.memo-body{white-space:pre-wrap;word-break:break-all;font-size:14px;line-height:1.6;padding:12px;}\n'
     + 'footer{margin-top:18px;font-size:11.5px;color:#8a8f80;text-align:center;line-height:1.6;}\n'
     + '@media print{body{background:#fff;}.card{border:1px solid #999;break-inside:avoid;}}\n'
     + '</style>\n</head>\n<body>\n<main>\n'
     + '<header><h1>방문일지</h1><div class="meta">' + esc(dateStr) + ' (' + weekdayKR(dateStr) + ')' + esc(periodTag) + ' · 총 ' + count + '건</div></header>\n'
     + body + '\n'
+    + memoSection
     + '<footer>방문일지 앱에서 저장한 파일입니다.<br>앱의 [불러오기]에서 이 파일을 선택하면 기록이 그대로 복원됩니다.</footer>\n'
     + '</main>\n'
     + '<script type="application/json" id="visit-log-data">' + dataJson + '<\/script>\n'
@@ -1374,13 +1531,15 @@ function parseReportText(text){
       visitor: get('방문담당자명').slice(0, LIMITS.visitor),
     };
   }
-  return { date: parsedDate, period: parsedPeriod, visits, hasData: hasAnyData(visits) };
+  const memoBlockMatch = text.match(/\[메모\]\n([\s\S]*)$/);
+  const parsedMemo = memoBlockMatch ? memoBlockMatch[1].trim().slice(0, MEMO_MAX) : '';
+  return { date: parsedDate, period: parsedPeriod, visits, memo: parsedMemo, hasData: hasAnyData(visits) };
 }
 
 // ---------------- 저장 (다운로드 폴더에 바로 저장) ----------------
 async function doShare(){
   await flushSave();
-  const html = buildReportHtml(currentDate, currentVisits, currentPeriod);
+  const html = buildReportHtml(currentDate, currentVisits, currentPeriod, currentMemo);
   // 파일명에 저장 시각(시분) 포함 → 누를 때마다 새 파일, 덮어쓰기 없음
   const filename = '방문일지_'+currentDate+'_'+PERIOD_LABEL[currentPeriod]+'_'+nowHHMM()+'.html';
   // 공유 시트(1개 항목 선택 → 파일관리자에서 수동 저장)를 거치지 않고
@@ -1409,7 +1568,7 @@ async function doImport(file){
     return;
   }
 
-  let date = null, period = null, visits = emptyVisits(), hasData = false;
+  let date = null, period = null, memo = null, visits = emptyVisits(), hasData = false;
   try{
     const trimmed = text.trim();
     const isJsonName = /\.json$/i.test(file.name || '');
@@ -1422,6 +1581,7 @@ async function doImport(file){
       hasData = hasAnyData(visits);
       date = (d.date && DATE_KEY_RE.test(d.date)) ? d.date : null;
       period = (d.period === 'AM' || d.period === 'PM') ? d.period : null;
+      memo = (typeof d.memo === 'string') ? d.memo.slice(0, MEMO_MAX) : null;
     } else if(isJsonName || trimmed.charAt(0) === '{' || trimmed.charAt(0) === '['){
       // JSON 저장 파일 (앱/웹의 내부 저장 형식)
       const parsed = JSON.parse(trimmed);
@@ -1432,7 +1592,7 @@ async function doImport(file){
     } else {
       // 텍스트 리포트 파일
       const r = parseReportText(text);
-      date = r.date; period = r.period; visits = r.visits; hasData = r.hasData;
+      date = r.date; period = r.period; visits = r.visits; memo = r.memo; hasData = r.hasData;
     }
   }catch(e){
     showToast('파일 내용을 해석하지 못했습니다');
@@ -1447,12 +1607,20 @@ async function doImport(file){
   await flushSave();
   if(date && DATE_KEY_RE.test(date)) currentDate = date;
   if(period) currentPeriod = period;
+  currentView = currentPeriod;
   currentVisits = visits;
   $('dateInput').value = currentDate;
   $('weekdayLabel').textContent = weekdayKR(currentDate);
   updatePeriodUI();
   renderCards();
   await saveCurrent();
+  if(memo){
+    currentMemo = memo;
+    const ta = $('memoText');
+    if(ta) ta.value = currentMemo;
+    updateMemoCount();
+    await saveMemoCurrent();
+  }
   switchTab('day');
   showToast(currentDate+' ('+PERIOD_LABEL[currentPeriod]+') 기록을 불러왔습니다');
 }
@@ -1467,7 +1635,7 @@ $('importFile').addEventListener('change', (e)=>{
 // ---------------- 복사 ----------------
 async function doCopy(){
   await flushSave();
-  const text = buildReportText(currentDate, currentVisits, currentPeriod);
+  const text = buildReportText(currentDate, currentVisits, currentPeriod, currentMemo);
   try{
     await navigator.clipboard.writeText(text);
     showToast('클립보드에 복사했습니다');
@@ -1563,8 +1731,8 @@ async function deriveShareKey(pin, saltBytes){
     ['encrypt','decrypt']
   );
 }
-async function encodeShareData(dateStr, visits, pin, period){
-  const payload = JSON.stringify({ d: dateStr, p: period||null, v: visits });
+async function encodeShareData(dateStr, visits, pin, period, memo){
+  const payload = JSON.stringify({ d: dateStr, p: period||null, v: visits, m: memo||'' });
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveShareKey(pin, salt);
@@ -1585,7 +1753,7 @@ async function decodeShareData(encoded, pin){
     const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ciphertext);
     const json = new TextDecoder().decode(plainBuf);
     const obj = JSON.parse(json);
-    return { date: obj.d, period: (obj.p==='AM'||obj.p==='PM') ? obj.p : null, visits: normalizeVisits(obj.v) };
+    return { date: obj.d, period: (obj.p==='AM'||obj.p==='PM') ? obj.p : null, visits: normalizeVisits(obj.v), memo: (typeof obj.m === 'string') ? obj.m : '' };
   }catch(e){ return null; } // 잠금번호가 틀렸거나 손상된 데이터
 }
 
@@ -1646,7 +1814,7 @@ function showChoiceModal(message, choices){
 
 async function doShareCode(){
   await flushSave();
-  if(!hasAnyData(currentVisits)){
+  if(!hasAnyData(currentVisits) && !currentMemo.trim()){
     showToast('공유할 기록이 없습니다');
     return;
   }
@@ -1673,7 +1841,7 @@ async function doShareCode(){
 
   let encoded;
   try{
-    encoded = await encodeShareData(currentDate, currentVisits, pinTrim, currentPeriod);
+    encoded = await encodeShareData(currentDate, currentVisits, pinTrim, currentPeriod, currentMemo);
   }catch(e){
     showToast('암호화 중 오류가 발생했습니다');
     return;
@@ -1746,7 +1914,7 @@ async function doImportCode(){
   }
 
   const decoded = await decodeShareData(data.payload, pin.trim());
-  if(!decoded || !hasAnyData(decoded.visits)){
+  if(!decoded || (!hasAnyData(decoded.visits) && !(decoded.memo && decoded.memo.trim()))){
     showToast('잠금번호가 틀렸거나 손상된 데이터입니다');
     return;
   }
@@ -1754,8 +1922,9 @@ async function doImportCode(){
   // 잠금번호가 맞아도, 실수로 현재 화면 내용을 덮어쓰지 않도록 한 번 더 확인
   const cnt = countFilled(decoded.visits);
   const periodLabel = decoded.period ? ' ('+PERIOD_LABEL[decoded.period]+')' : '';
+  const memoNote = decoded.memo && decoded.memo.trim() ? ' + 메모' : '';
   const ok = await showConfirmModal(
-    (decoded.date || '(날짜 미상)') + periodLabel + ' 기록 ' + cnt + '건을 불러올까요?\n'
+    (decoded.date || '(날짜 미상)') + periodLabel + ' 기록 ' + cnt + '건' + memoNote + '을 불러올까요?\n'
     + '현재 화면에 보이는 내용은 이 기록으로 대체됩니다.'
   );
   if(!ok){
@@ -1766,12 +1935,18 @@ async function doImportCode(){
   await flushSave();
   if(decoded.date && DATE_KEY_RE.test(decoded.date)) currentDate = decoded.date;
   if(decoded.period) currentPeriod = decoded.period;
+  currentView = currentPeriod;
   currentVisits = decoded.visits;
+  currentMemo = decoded.memo || '';
   $('dateInput').value = currentDate;
   $('weekdayLabel').textContent = weekdayKR(currentDate);
   updatePeriodUI();
   renderCards();
+  const ta = $('memoText');
+  if(ta) ta.value = currentMemo;
+  updateMemoCount();
   await saveCurrent();
+  await saveMemoCurrent();
   switchTab('day');
   showToast(currentDate+' 공유 코드에서 기록을 불러왔습니다');
 }
@@ -2026,10 +2201,15 @@ $('dateInput').addEventListener('change', async (e)=>{
 });
 document.querySelectorAll('.period-btn').forEach(btn=>{
   btn.addEventListener('click', async ()=>{
-    const p = btn.dataset.period;
-    if(p === currentPeriod) return;
+    const v = btn.dataset.view;
+    if(v === currentView) return;
     await flushSave();
-    loadDate(currentDate, p);
+    if(v === 'AM' || v === 'PM'){
+      loadDate(currentDate, v);
+    } else {
+      currentView = 'MEMO';
+      updatePeriodUI();
+    }
   });
 });
 $('tabDay').addEventListener('click', async ()=>{ await flushSave(); switchTab('day'); });
