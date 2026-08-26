@@ -714,6 +714,7 @@
 <div class="actionbar" id="actionbar">
   <button class="btn-copy" id="importBtn" type="button">불러오기</button>
   <button class="btn-copy" id="copyBtn" type="button">복사</button>
+  <button class="btn-copy" id="exportXlsxBtn" type="button">주소 엑셀</button>
   <button class="btn-share" id="shareBtn" type="button">저장</button>
 </div>
 <input type="file" id="importFile" accept=".txt,.json,.html,.htm,text/plain,application/json,text/html" style="display:none">
@@ -759,6 +760,12 @@ const storage = (() => {
 })();
 
 const LIMITS = { addr:80, name:20, changed:20, note:100, visitor:20 };
+// v24: 방문주소는 항상 '충청북도 제천시'로 시작하므로, 카드가 새로 만들어질 때
+// 이 접두사를 자동으로 입력칸에 채워두고 사용자는 나머지만 입력하면 되게 한다.
+const ADDR_PREFIX = '충청북도 제천시 ';
+function addrFilled(addr){
+  return !!(addr && addr.trim() && addr.trim() !== ADDR_PREFIX.trim());
+}
 const FIELD_META = [
   {key:'visitor', label:'방문담당자명', type:'input',    max:LIMITS.visitor},
   {key:'addr',    label:'방문주소',     type:'input',    max:LIMITS.addr},
@@ -819,7 +826,7 @@ function nowHHMMSS(){
 }
 function emptyVisits(n){
   const count = n || DEFAULT_VISIT_COUNT;
-  return Array.from({length: count}, () => ({addr:'',name:'',changed:'',note:'',time:'',visitor:'',order:''}));
+  return Array.from({length: count}, () => ({addr:ADDR_PREFIX,name:'',changed:'',note:'',time:'',visitor:'',order:''}));
 }
 const _weekdayCache = {};
 function weekdayKR(dateStr){
@@ -834,7 +841,7 @@ function keyFor(dateStr, period){ return 'visit-log:'+dateStr+':'+(period||curre
 function legacyKeyFor(dateStr){ return 'visit-log:'+dateStr; } // v19 이전 형식(오전/오후 구분 없음)
 
 function hasAnyData(visits){
-  return visits.some(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor);
+  return visits.some(v => addrFilled(v.addr) || v.name || v.changed || v.note || v.time || v.visitor);
 }
 
 // 손상된 저장 데이터를 안전하게 보정 (앱이 죽지 않도록)
@@ -1004,7 +1011,7 @@ $('memoText') && $('memoText').addEventListener('input', (e)=>{
 });
 
 function countFilled(visits){
-  return visits.filter(v => v.addr || v.name || v.changed || v.note || v.time || v.visitor).length;
+  return visits.filter(v => addrFilled(v.addr) || v.name || v.changed || v.note || v.time || v.visitor).length;
 }
 
 function updateProgress(){
@@ -1027,7 +1034,7 @@ function addVisitCard(){
     showToast('카드는 최대 ' + MAX_VISIT_COUNT + '개까지 만들 수 있습니다');
     return;
   }
-  currentVisits.push({addr:'',name:'',changed:'',note:'',time:'',visitor:'',order:''});
+  currentVisits.push({addr:ADDR_PREFIX,name:'',changed:'',note:'',time:'',visitor:'',order:''});
   renderCards();
   saveCurrent();
   showToast('카드가 추가되었습니다 (' + currentVisits.length + '/' + MAX_VISIT_COUNT + ')');
@@ -1417,7 +1424,7 @@ function buildReportText(dateStr, visits, period, memo){
   lines.push('='.repeat(28));
   let count = 0;
   visits.forEach((v, i)=>{
-    if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
+    if(!(addrFilled(v.addr)||v.name||v.changed||v.note||v.time||v.visitor)) return;
     count++;
     lines.push('');
     lines.push('[방문 '+(i+1)+']');
@@ -1445,7 +1452,7 @@ function buildReportHtml(dateStr, visits, period, memo){
   let count = 0;
   const cards = [];
   visits.forEach((v, i)=>{
-    if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
+    if(!(addrFilled(v.addr)||v.name||v.changed||v.note||v.time||v.visitor)) return;
     count++;
     cards.push(
       '<section class="card"><div class="ch">방문 '+(i+1)+'</div><div class="cb">'
@@ -1565,6 +1572,194 @@ function downloadFile(filename, text, mime){
   document.body.appendChild(a); a.click(); a.remove();
   // 즉시 해제하면 일부 브라우저에서 다운로드가 취소될 수 있어 지연 해제
   setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+function downloadBinaryFile(filename, bytes, mime){
+  const blob = new Blob([bytes], {type: mime || 'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+// ---------------- 방문주소 → 엑셀(.xlsx) 내보내기 ----------------
+// 외부 라이브러리 없이(네트워크 요청 없이) 순수 JS로 최소 규격의 XLSX
+// 파일(zip, 무압축 store 방식)을 직접 만들어낸다. 열: 주소 / 메모.
+(function(){
+  function crc32(bytes){
+    let crcTable = crc32.table;
+    if(!crcTable){
+      crcTable = crc32.table = [];
+      for(let n=0;n<256;n++){
+        let c = n;
+        for(let k=0;k<8;k++){ c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); }
+        crcTable[n] = c >>> 0;
+      }
+    }
+    let crc = 0 ^ (-1);
+    for(let i=0;i<bytes.length;i++){
+      crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[i]) & 0xFF];
+    }
+    return (crc ^ (-1)) >>> 0;
+  }
+  function strToBytes(str){ return new TextEncoder().encode(str); }
+  function buildZip(files){
+    const localParts = [], centralParts = [];
+    let offset = 0;
+    const time = 0, date = 0x21; // 고정 타임스탬프(1980-01-01)
+    files.forEach(f => {
+      const nameBytes = strToBytes(f.name);
+      const data = f.data;
+      const crc = crc32(data);
+      const size = data.length;
+      const localHeader = new Uint8Array(30 + nameBytes.length);
+      const lv = new DataView(localHeader.buffer);
+      lv.setUint32(0, 0x04034b50, true);
+      lv.setUint16(4, 20, true);
+      lv.setUint16(6, 0, true);
+      lv.setUint16(8, 0, true);
+      lv.setUint16(10, time, true);
+      lv.setUint16(12, date, true);
+      lv.setUint32(14, crc, true);
+      lv.setUint32(18, size, true);
+      lv.setUint32(22, size, true);
+      lv.setUint16(26, nameBytes.length, true);
+      lv.setUint16(28, 0, true);
+      localHeader.set(nameBytes, 30);
+      localParts.push(localHeader, data);
+
+      const central = new Uint8Array(46 + nameBytes.length);
+      const cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0, true);
+      cv.setUint16(10, 0, true);
+      cv.setUint16(12, time, true);
+      cv.setUint16(14, date, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, size, true);
+      cv.setUint32(24, size, true);
+      cv.setUint16(28, nameBytes.length, true);
+      cv.setUint16(30, 0, true);
+      cv.setUint16(32, 0, true);
+      cv.setUint16(34, 0, true);
+      cv.setUint16(36, 0, true);
+      cv.setUint32(38, 0, true);
+      cv.setUint32(42, offset, true);
+      central.set(nameBytes, 46);
+      centralParts.push(central);
+      offset += localHeader.length + data.length;
+    });
+    const centralStart = offset;
+    let centralSize = 0;
+    centralParts.forEach(c => centralSize += c.length);
+    const end = new Uint8Array(22);
+    const ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(4, 0, true);
+    ev.setUint16(6, 0, true);
+    ev.setUint16(8, files.length, true);
+    ev.setUint16(10, files.length, true);
+    ev.setUint32(12, centralSize, true);
+    ev.setUint32(16, centralStart, true);
+    ev.setUint16(20, 0, true);
+    const total = offset + centralSize + end.length;
+    const out = new Uint8Array(total);
+    let p = 0;
+    localParts.forEach(part => { out.set(part, p); p += part.length; });
+    centralParts.forEach(part => { out.set(part, p); p += part.length; });
+    out.set(end, p);
+    return out;
+  }
+  function xmlEscape(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+  }
+  function colName(n){
+    let s = '';
+    while(n > 0){ const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function buildSheetXml(rows){
+    const rowXml = rows.map((row, ri) => {
+      const cells = row.map((val, ci) => {
+        const ref = colName(ci+1) + (ri+1);
+        return '<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEscape(val)+'</t></is></c>';
+      }).join('');
+      return '<row r="'+(ri+1)+'">'+cells+'</row>';
+    }).join('');
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + '<sheetData>'+rowXml+'</sheetData></worksheet>';
+  }
+  function buildXlsxBytes(rows, sheetName){
+    sheetName = sheetName || 'Sheet1';
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + '</Types>';
+    const rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      + '</Relationships>';
+    const workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      + '<sheets><sheet name="'+xmlEscape(sheetName)+'" sheetId="1" r:id="rId1"/></sheets></workbook>';
+    const workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+      + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      + '</Relationships>';
+    const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+      + '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
+      + '<borders count="1"><border/></borders>'
+      + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+      + '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+      + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+      + '</styleSheet>';
+    const sheetXml = buildSheetXml(rows);
+    const files = [
+      { name: '[Content_Types].xml', data: strToBytes(contentTypes) },
+      { name: '_rels/.rels', data: strToBytes(rootRels) },
+      { name: 'xl/workbook.xml', data: strToBytes(workbookXml) },
+      { name: 'xl/_rels/workbook.xml.rels', data: strToBytes(workbookRels) },
+      { name: 'xl/styles.xml', data: strToBytes(stylesXml) },
+      { name: 'xl/worksheets/sheet1.xml', data: strToBytes(sheetXml) },
+    ];
+    return buildZip(files);
+  }
+  window.__buildXlsxBytes = buildXlsxBytes;
+})();
+
+function exportTimestamp(){
+  const d = new Date();
+  const p = (n)=>String(n).padStart(2,'0');
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
+}
+
+// 현재 화면(오전/오후)에 입력된 카드 중 주소가 채워진 것만 골라
+// [주소, 메모] 형식의 엑셀 파일로 내보낸다. 파일명: yyyyMMdd_HHmmss.xlsx
+function exportAddressXlsx(){
+  const filled = currentVisits.filter(v => addrFilled(v.addr));
+  if(filled.length === 0){
+    showToast('내보낼 방문주소가 없습니다');
+    return;
+  }
+  const rows = [['주소','메모']];
+  filled.forEach(v => rows.push([v.addr.trim(), v.note || '']));
+  const bytes = window.__buildXlsxBytes(rows, 'Sheet1');
+  const filename = exportTimestamp()+'.xlsx';
+  downloadBinaryFile(filename, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  showToast(filename+' 다운로드 폴더에 저장됨 ('+filled.length+'건)');
 }
 
 // ---------------- 불러오기 (.txt / .json 모두 지원) ----------------
@@ -1717,7 +1912,7 @@ async function doSearch(){
         visits = normalizeVisits(parsed);
       }catch(e){ continue; } // 깨진 기록은 건너뜀
       visits.forEach((v, idx) => {
-        if(!(v.addr||v.name||v.changed||v.note||v.time||v.visitor)) return;
+        if(!(addrFilled(v.addr)||v.name||v.changed||v.note||v.time||v.visitor)) return;
         // 어느 항목이 일치했는지 함께 기록 (결과에 '일치 항목'으로 표시)
         const matched = [];
         searchFields.forEach((k)=>{
@@ -1918,6 +2113,7 @@ document.querySelectorAll('.period-btn').forEach(btn=>{
 $('tabDay').addEventListener('click', async ()=>{ await flushSave(); switchTab('day'); });
 $('tabHistory').addEventListener('click', async ()=>{ await flushSave(); switchTab('history'); });
 $('shareBtn').addEventListener('click', doShare);
+$('exportXlsxBtn').addEventListener('click', exportAddressXlsx);
 $('copyBtn').addEventListener('click', doCopy);
 
 loadSettings().then(()=>{
