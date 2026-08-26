@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>방문일지</title>
-<meta name="theme-color" content="#0f6a5f">
+<meta name="theme-color" content="#1B4A40">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -12,8 +12,43 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v23
+  방문일지 (Visit Log) v24
   =========================
+  v23 → v24 개선 사항:
+  1. (기능) 카드 삭제 추가:
+     - 각 카드 오른쪽 위 휴지통 버튼으로 그 카드 하나만 지울 수 있음.
+       뒤 카드들의 번호는 자동으로 하나씩 당겨짐.
+     - 내용이 들어 있는 카드는 앱 안에 직접 만든 확인창을 한 번 띄움
+       (설치된 PWA에서 window.confirm 이 안 뜨는 문제를 피하려고 v15와
+        같은 이유로 자체 모달을 씀). 빈 카드는 확인 없이 바로 지움.
+     - 지운 직후 6초 동안 "되돌리기" 버튼이 토스트에 뜸 → 오탭해도 복구 가능.
+     - 카드가 1개만 남으면 삭제 버튼은 숨김 (최소 1개는 유지).
+     - 저장 데이터의 카드 개수를 그대로 복원하도록 normalizeVisits 수정.
+       v23까지는 최소 4개로 강제 보정해서, 4개 아래로 지워도 다시 열면
+       빈 카드가 되살아났음.
+  2. (기능) 엑셀 주소 가져오기의 덮어쓰기 확인창도 위와 같은 자체 모달로 교체
+     (기존 window.confirm 은 설치형 PWA에서 안 뜰 수 있었음).
+  3. (디자인) 화면 정리 — 항상 떠 있던 컨트롤을 줄여 첫 화면을 비움:
+     - 헤더: 장식용 눈썹줄("FIELD VISIT LOG …")과 큰 제목을 없애고
+       앱 이름 + 작성 진행칩 한 줄로 합침. 오전/오후/메모 탭은 세그먼트형으로.
+     - 검색줄(범위+입력+버튼)을 상시 노출에서 돋보기 버튼 안으로 접음
+       → '오늘 기록 / 지난 기록 / 돋보기' 한 줄로 통합(2줄 → 1줄).
+     - 자동저장·5분 임시저장·내비앱 3줄을 "● 자동 저장됨 … [설정]" 한 줄로
+       합치고, 나머지는 [설정]을 눌렀을 때만 펼쳐지는 패널로 옮김.
+     - 하단 5버튼([불러오기][복사][주소 가져오기][주소 내보내기][저장])을
+       [파일][복사][저장] 3개로 줄임. 파일 관련 3가지는 [파일] 메뉴 안에
+       설명과 함께 들어감 (12px 글자가 2줄로 줄바꿈되던 문제 해소).
+     - 카드 머리의 "방문 N / M" 문구 삭제(번호 배지와 중복).
+     - 항목마다 상시 표시되던 글자수(0/80 …)를 입력 중이거나 한도의 80%를
+       넘었을 때만 보이게 함 (카드당 5개 × 카드 수만큼 사라짐).
+     - "N번 → N+1번 구간 경로" 버튼을 앞뒤 카드에 주소가 둘 다 있을 때만 표시.
+     - 순서 정렬 안내문은 순서 칸을 한 번도 안 쓴 상태에서만 표시.
+     - 모서리 반경(0/3/6/8px 혼재) · 테두리 굵기(1.3/1.5/2px 혼재) ·
+       그림자(딱딱한 3px 3px 0 과 부드러운 그림자 혼재)를 토큰 3단계로 통일.
+     - 배경 줄무늬 텍스처 농도를 낮춤(opacity .5 → .34, 간격 28px → 32px).
+  4. (버그) 빠른 검색 결과 머리글의 "방문 N / 4"가 카드 수와 무관하게 항상
+     4로 찍히던 것 수정 → 그 기록의 실제 카드 수로 표시.
+
   v22 → v23 개선 사항:
   1. (보안) 불러오기(파일 불러오기)를 통한 저장형 XSS 취약점 수정:
      - 카드 화면의 "방문시각" 표시가 innerHTML 템플릿에 이스케이프 없이
@@ -199,175 +234,193 @@
       폰트에 맑은고딕 폴백 추가.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
+  /* ===================================================================
+     디자인 토큰 (v24)
+     v23까지는 모서리 반경(0/3/6/8px), 테두리 굵기(1.3/1.5/2px),
+     그림자(딱딱한 3px 3px 0 + 부드러운 그림자)가 요소마다 제각각이라
+     화면이 어수선해 보였음 → 아래 토큰으로 전부 통일한다.
+     =================================================================== */
   :root{
-    --paper: #ECF0EA;
-    --paper-2: #DFE5DE;
-    --ink: #202B36;
-    --ink-soft: #56635F;
-    --teal: #2F6F62;
-    --teal-dark: #1B4A40;
-    --teal-pale: #DCE8E2;
-    --brick: #A63D40;
-    --brick-pale: #F3E1E0;
-    --line: #C7CFC5;
-    --card: #F5F7F3;
-    --shadow-c: rgba(27,74,64,.16);
+    /* 표면 */
+    --paper:#EEF1EB;
+    --paper-2:#E4E9E2;
+    --card:#FBFCFA;
+    --field:#FFFFFF;
+
+    /* 글자 */
+    --ink:#1F2A26;
+    --ink-soft:#63706A;
+    --ink-faint:#98A49E;
+
+    /* 강조 */
+    --teal:#2F6F62;
+    --teal-dark:#1B4A40;
+    --teal-pale:#E0EBE5;
+    --brick:#A63D40;
+    --brick-pale:#F7E9E8;
+
+    /* 선 */
+    --line:#DBE1D9;
+    --line-strong:#BCC6BB;
+
+    /* 모서리 — 3단계로 고정 */
+    --r-sm:7px;
+    --r-md:10px;
+    --r-lg:14px;
+    --r-pill:999px;
+
+    /* 그림자 — 3단계로 고정 */
+    --sh-1:0 1px 2px rgba(27,58,48,.05);
+    --sh-2:0 2px 8px -3px rgba(27,58,48,.16), 0 1px 2px rgba(27,58,48,.05);
+    --sh-3:0 14px 34px -12px rgba(27,58,48,.34), 0 3px 8px rgba(27,58,48,.10);
   }
+
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     background:
-      radial-gradient(1200px 500px at 50% -120px, rgba(255,255,255,.55), transparent 60%),
+      radial-gradient(1100px 460px at 50% -140px, rgba(255,255,255,.5), transparent 62%),
       var(--paper);
     color:var(--ink);
     font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+    font-size:14px;
+    -webkit-text-size-adjust:100%;
     min-height:100vh;
-    padding-bottom:96px;
+    padding-bottom:84px;
   }
-  button, input, textarea, select{ transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, opacity .16s ease, transform .1s ease; }
+  button, input, textarea, select{
+    font-family:inherit;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease,
+                box-shadow .15s ease, opacity .15s ease, transform .09s ease;
+  }
+  .hide{ display:none !important; }
+
+  /* 장부 느낌의 배경 줄무늬 — v23의 절반 이하 농도로 낮춰 배경으로만 남긴다 */
   .bg-texture{
-    position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
-    background-image: repeating-linear-gradient(180deg, transparent, transparent 27px, var(--line) 28px);
+    position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.34;
+    background-image: repeating-linear-gradient(180deg, transparent, transparent 31px, var(--line) 32px);
   }
+
+  /* ------------------------------- 헤더 ------------------------------- */
   header{
     position:relative; z-index:1;
-    padding:22px 18px 16px;
-    border-bottom:2px solid var(--ink);
-    background:linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0) 70%);
-    box-shadow: 0 6px 18px -12px rgba(20,30,25,.35);
+    padding:14px 16px 14px;
+    border-bottom:1px solid var(--line-strong);
+    background:linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,0) 80%);
   }
-  .eyebrow-row{
-    display:flex; align-items:center; justify-content:space-between; gap:8px;
-    margin-bottom:4px;
+  .app-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin-bottom:12px;
   }
-  .eyebrow{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px; letter-spacing:.14em; color:var(--teal-dark);
-    text-transform:uppercase;
+  .brand{
+    font-family:'Noto Serif KR','Malgun Gothic',serif;
+    font-weight:700; font-size:20px; margin:0;
+    letter-spacing:-.01em; display:flex; align-items:baseline; gap:6px;
   }
   .ver-tag{
-    display:inline-block; margin-left:4px; padding:1px 6px;
-    border:1px solid var(--teal-dark); border-radius:8px;
-    font-size:10px; letter-spacing:.05em;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px; font-weight:500; letter-spacing:.04em;
+    color:var(--ink-faint);
   }
   .progress-chip{
     font-family:'IBM Plex Mono',monospace;
-    font-size:11px; font-weight:600; color:var(--teal-dark);
-    border:1.3px solid var(--teal-dark); background:var(--teal-pale);
-    padding:2px 8px; white-space:nowrap;
-    border-radius:3px;
+    font-size:11.5px; font-weight:600; color:var(--teal-dark);
+    border:1px solid rgba(27,74,64,.28); background:var(--teal-pale);
+    padding:4px 9px; white-space:nowrap; border-radius:var(--r-pill);
   }
-  h1{
-    font-family:'Noto Serif KR','Malgun Gothic',serif;
-    font-weight:700; font-size:26px; margin:0 0 12px;
-    letter-spacing:-.01em;
-  }
-  .date-nav{
-    display:flex; align-items:center; gap:10px;
-  }
+
+  .date-nav{ display:flex; align-items:center; gap:8px; }
   .date-nav button{
-    width:38px;height:38px; border-radius:8px; border:1.5px solid var(--ink);
-    background:var(--card); color:var(--ink); font-size:17px; font-family:'IBM Plex Mono',monospace;
-    cursor:pointer; flex-shrink:0;
-    box-shadow: 0 2px 0 var(--shadow-c);
+    width:38px; height:40px; flex-shrink:0;
+    border-radius:var(--r-sm); border:1px solid var(--line-strong);
+    background:var(--card); color:var(--ink-soft);
+    font-size:18px; font-family:'IBM Plex Mono',monospace; line-height:1;
+    cursor:pointer; box-shadow:var(--sh-1);
   }
-  .date-nav button:active{ background:var(--ink); color:var(--card); transform:translateY(1px); box-shadow:none; }
+  .date-nav button:active{ background:var(--paper-2); color:var(--ink); transform:scale(.97); }
   .date-display{
-    flex:1; min-width:0;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:15px; font-weight:600;
-    border:1.5px solid var(--ink); background:var(--card);
-    padding:8px 10px; text-align:center; border-radius:8px;
-    display:flex; align-items:center; justify-content:center; gap:8px;
-    box-shadow: 0 2px 0 var(--shadow-c);
+    flex:1; min-width:0; height:40px;
+    border:1px solid var(--line-strong); background:var(--card);
+    padding:0 12px; border-radius:var(--r-sm);
+    display:flex; align-items:center; gap:8px;
+    box-shadow:var(--sh-1);
   }
   .date-display input[type=date]{
-    border:none; background:transparent; font-family:'IBM Plex Mono',monospace;
-    font-size:14px; font-weight:600; color:var(--ink); width:100%; min-width:0;
+    border:none; background:transparent; padding:0;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px; font-weight:600; color:var(--ink);
+    flex:1; min-width:0;
   }
-  .weekday{ color:var(--teal-dark); flex-shrink:0; }
+  .date-display input[type=date]:focus{ outline:none; }
+  .weekday{ color:var(--teal-dark); font-size:13px; font-weight:600; flex-shrink:0; }
 
   .period-toggle{
-    display:flex; gap:6px; margin-top:10px;
+    display:flex; gap:4px; margin-top:10px;
+    background:var(--paper-2); border-radius:var(--r-sm); padding:4px;
   }
   .period-btn{
-    flex:1; border:1.5px solid var(--ink); border-radius:8px; background:var(--card); color:var(--ink);
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-weight:700;
-    font-size:14px; padding:9px 4px; cursor:pointer;
+    flex:1; border:none; border-radius:calc(var(--r-sm) - 3px);
+    background:transparent; color:var(--ink-soft);
+    font-weight:700; font-size:13.5px; padding:9px 4px; cursor:pointer;
   }
-  .period-btn.active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; box-shadow: 0 3px 0 var(--shadow-c); transform:translateY(-1px); }
-  .period-btn.memo-btn.active{ background:var(--brick); border-color:var(--brick); box-shadow: 0 3px 0 rgba(166,61,64,.28); }
+  .period-btn.active{ background:var(--teal-dark); color:#fff; box-shadow:var(--sh-1); }
+  .period-btn.memo-btn.active{ background:var(--brick); }
   .period-btn .period-count{
     font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:11.5px;
-    opacity:.85; margin-left:4px;
+    opacity:.8; margin-left:3px;
   }
 
-  main{ position:relative; z-index:1; padding:16px; }
+  /* -------------------------------- 본문 ------------------------------- */
+  main{ position:relative; z-index:1; padding:14px 16px 16px; }
 
-  .memo-panel{
-    background:var(--card); border:1.5px solid var(--ink); border-radius:8px;
-    box-shadow: 3px 3px 0 var(--line);
-    padding:14px; margin-bottom:16px;
+  /* 화면 전환 + 검색 열기 — v23의 '탭 줄 + 검색 줄' 2줄을 1줄로 합침 */
+  .viewbar{ display:flex; gap:6px; margin-bottom:12px; }
+  .viewbar button{
+    flex:1; padding:9px 6px; font-size:13px; font-weight:600;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--card); color:var(--ink-soft); cursor:pointer;
   }
-  .memo-panel.hide{ display:none; }
-  #visitsPanel.hide{ display:none; }
-  .memo-head{
-    display:flex; align-items:center; justify-content:space-between;
-    margin-bottom:10px;
+  .viewbar button.active{
+    background:var(--ink); border-color:var(--ink); color:var(--paper);
+    box-shadow:var(--sh-1);
   }
-  .memo-label{
-    font-family:'Noto Serif KR','Malgun Gothic',serif; font-weight:700; font-size:15px;
-    color:var(--brick);
+  .icon-btn{
+    flex:0 0 44px !important; padding:0 !important;
+    display:flex; align-items:center; justify-content:center;
   }
-  .memo-count{
-    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
-  }
-  .memo-count.warn{ color:var(--brick); font-weight:600; }
-  .memo-textarea{
-    width:100%; min-height:280px; resize:vertical;
-    border:1.3px solid var(--line); border-radius:6px; background:#fff;
-    padding:12px; font-size:14.5px; line-height:1.6;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
-  }
-  .memo-textarea:focus{ outline:none; border-color:var(--brick); }
+  .icon-btn svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 
-  .search-bar{
-    display:flex; gap:8px; margin-bottom:16px;
-  }
+  .search-bar{ display:none; gap:6px; margin-bottom:12px; }
+  .search-bar.show{ display:flex; }
   .search-bar input{
-    flex:1; min-width:0; border:1.5px solid var(--ink); border-radius:8px; background:#fff;
-    padding:10px 12px; font-size:14px;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
+    flex:1; min-width:0; border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--field); padding:9px 11px; font-size:14px; color:var(--ink);
   }
-  .search-bar input:focus{ outline:none; border-color:var(--teal); }
-  .search-bar button{
-    padding:10px 16px; font-size:13.5px; font-weight:700; cursor:pointer;
-    border:1.5px solid var(--teal-dark); border-radius:8px; background:var(--teal-dark); color:#fff;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; white-space:nowrap;
-    flex-shrink:0;
-  }
+  .search-bar input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(47,111,98,.12); }
   .search-bar select{
-    flex-shrink:0; border:1.5px solid var(--ink); border-radius:8px; background:#fff;
-    padding:10px 4px; font-size:13px;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; color:var(--ink);
+    flex-shrink:0; border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--field); padding:9px 4px; font-size:12.5px; color:var(--ink-soft);
   }
-  .search-bar button:active{ background:var(--ink); border-color:var(--ink); }
-  .search-bar .search-clear{
-    background:var(--card); color:var(--ink); border-color:var(--ink);
+  .search-bar button{
+    padding:9px 15px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;
+    border:1px solid var(--teal-dark); border-radius:var(--r-sm);
+    background:var(--teal-dark); color:#fff; flex-shrink:0;
   }
+  .search-bar button:active{ background:var(--teal); }
+
   .search-view{ display:none; }
   .search-view.show{ display:block; }
   .search-meta{
     font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
-    margin:-4px 0 14px; padding:0 4px;
+    margin:0 0 12px; padding:0 2px;
   }
   .result-card{ cursor:pointer; }
   .result-card:active{ border-color:var(--teal); }
-  .result-card .card-head{ flex-wrap:wrap; row-gap:6px; }
+  .result-card .card-head{ flex-wrap:wrap; row-gap:6px; align-items:flex-start; }
   .result-date{
-    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:12.5px;
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:12px;
     color:var(--teal-dark);
   }
   .result-head-main{ flex:1; min-width:0; }
@@ -377,275 +430,362 @@
   }
   .result-match{
     font-family:'IBM Plex Mono',monospace; font-size:10.5px;
-    color:var(--teal-dark); border:1px solid var(--teal-dark);
-    background:var(--teal-pale); padding:2px 7px; white-space:nowrap;
+    color:var(--teal-dark); border:1px solid rgba(27,74,64,.3); border-radius:var(--r-pill);
+    background:var(--teal-pale); padding:2px 8px; white-space:nowrap;
   }
-  .result-body{ padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
-  .result-row{ display:flex; gap:8px; font-size:13.5px; align-items:baseline; }
-  .result-row .rk{
-    flex-shrink:0; width:82px; color:var(--ink-soft);
-    font-size:12.5px; font-weight:500;
-  }
+  .result-body{ padding:12px 14px; display:flex; flex-direction:column; gap:7px; }
+  .result-row{ display:flex; gap:10px; font-size:13.5px; align-items:baseline; }
+  .result-row .rk{ flex-shrink:0; width:78px; color:var(--ink-soft); font-size:12.5px; }
   .result-row .rv{ flex:1; min-width:0; word-break:break-all; }
-  mark{ background:#F2E3A0; color:inherit; padding:0 1px; }
+  mark{ background:#F5E7A8; color:inherit; padding:0 1px; border-radius:2px; }
 
-  .toolbar{
-    display:flex; gap:8px; margin-bottom:16px;
+  /* 저장 상태 + 설정 — v23의 3줄(자동저장/임시저장/내비앱)을 1줄 + 접이식으로 */
+  .status-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin:0 0 12px; padding:0 2px;
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
   }
-  .toolbar button{
-    flex:1; padding:10px 6px; font-size:12.5px; font-weight:600;
-    border:1.5px solid var(--ink); border-radius:8px; background:var(--card); color:var(--ink);
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; cursor:pointer;
+  .status-left{ display:flex; align-items:center; gap:7px; min-width:0; }
+  .status-left .dot{
+    width:6px; height:6px; border-radius:50%; background:var(--teal); flex-shrink:0;
   }
-  .toolbar button.active{ background:var(--ink); color:var(--paper); box-shadow: 0 2px 0 var(--shadow-c); }
+  .gear-btn{
+    display:flex; align-items:center; gap:5px; flex-shrink:0;
+    font-size:11.5px; font-weight:600; color:var(--ink-soft);
+    border:1px solid var(--line-strong); border-radius:var(--r-pill);
+    background:var(--card); padding:5px 11px; cursor:pointer;
+  }
+  .gear-btn svg{ width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+  .gear-btn.active{ background:var(--ink); border-color:var(--ink); color:var(--paper); }
 
+  .settings-panel{
+    background:var(--card); border:1px solid var(--line);
+    border-radius:var(--r-md); box-shadow:var(--sh-1);
+    padding:4px 14px; margin-bottom:12px;
+  }
+  .setting-item{
+    display:flex; align-items:center; gap:12px;
+    padding:12px 0; margin:0;
+  }
+  .setting-item + .setting-item{ border-top:1px solid var(--line); }
+  .setting-text{ flex:1; min-width:0; font-size:13px; color:var(--ink); line-height:1.35; }
+  .setting-text small{ display:block; font-size:11px; color:var(--ink-faint); margin-top:2px; }
+  .setting-val{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-faint); flex-shrink:0; }
+  .switch-label{ cursor:pointer; }
+  .switch-label input[type=checkbox]{
+    width:17px; height:17px; accent-color:var(--teal-dark); cursor:pointer; flex-shrink:0; margin:0;
+  }
+  .nav-pref-toggle{
+    display:flex; flex-shrink:0;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm); overflow:hidden;
+  }
+  .nav-pref-btn{
+    font-size:12.5px; font-weight:600; border:none;
+    background:var(--field); color:var(--ink-soft); padding:7px 12px; cursor:pointer;
+  }
+  .nav-pref-btn + .nav-pref-btn{ border-left:1px solid var(--line-strong); }
+  .nav-pref-btn.active{ background:var(--teal-dark); color:#fff; }
+
+  /* 섹션 머리 */
+  .section-head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin:0 0 10px; padding:0 2px;
+  }
+  .section-title{ font-size:13px; font-weight:700; color:var(--ink-soft); }
+  .section-count{
+    font-family:'IBM Plex Mono',monospace; color:var(--teal-dark); font-weight:600;
+  }
+  .sort-btn{
+    flex-shrink:0; font-size:12.5px; font-weight:700; padding:8px 12px; white-space:nowrap;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--card); color:var(--teal-dark); cursor:pointer; box-shadow:var(--sh-1);
+  }
+  .sort-btn:active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; }
+  /* 안내문은 '순서'를 한 번도 안 쓴 상태에서만 보이고, 쓰기 시작하면 사라진다 */
+  .sort-hint{
+    margin:-4px 0 12px; padding:0 2px;
+    font-size:11.5px; line-height:1.55; color:var(--ink-faint);
+  }
+  .sort-hint b{ color:var(--ink-soft); }
+
+  /* -------------------------------- 카드 ------------------------------- */
   .card{
     background:var(--card);
-    border:1.5px solid var(--ink);
-    border-radius:8px;
-    margin-bottom:16px;
-    position:relative;
-    overflow:hidden;
-    box-shadow: 3px 3px 0 var(--line);
-  }
-  .add-card-btn{
-    display:block; width:100%; box-sizing:border-box;
-    padding:14px; margin-bottom:24px; border-radius:8px;
-    background:var(--card); color:var(--teal-dark);
-    border:1.5px dashed var(--teal-dark);
-    font-size:14px; font-weight:700; cursor:pointer;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-  }
-  .add-card-btn:active{ background:var(--paper-2); }
-  .add-card-btn[disabled]{
-    opacity:.5; border-style:solid; color:var(--ink-soft); cursor:default;
+    border:1px solid var(--line);
+    border-radius:var(--r-lg);
+    margin-bottom:12px;
+    position:relative; overflow:hidden;
+    box-shadow:var(--sh-2);
   }
   .card-head{
-    display:flex; align-items:center; gap:10px;
-    padding:10px 14px;
-    border-bottom:1.5px dashed var(--line);
-    background:var(--paper-2);
+    display:flex; align-items:center; gap:6px;
+    padding:9px 10px 9px 12px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--paper-2), rgba(228,233,226,.45));
   }
   .stub-num{
     font-family:'IBM Plex Mono',monospace;
-    font-weight:600; font-size:14px;
-    width:26px;height:26px;
-    border:1.5px solid var(--teal-dark);
-    color:var(--teal-dark);
-    display:flex;align-items:center;justify-content:center;
-    flex-shrink:0;
+    font-weight:600; font-size:12.5px;
+    width:24px; height:24px; border-radius:var(--r-pill);
+    background:var(--teal-dark); color:#fff;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .order-area{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
-  .order-area label{
-    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.05em;
-    color:var(--ink-soft); text-transform:uppercase;
-  }
+  .order-area{ display:flex; align-items:center; gap:5px; flex-shrink:0; }
+  .order-area label{ font-size:11px; color:var(--ink-soft); }
   .order-input{
-    width:38px; height:26px; padding:0 2px; text-align:center;
+    width:34px; height:26px; padding:0 2px; text-align:center;
     font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px;
-    border:1.5px solid var(--line); background:#fff; color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--field); color:var(--ink);
   }
-  .order-input:focus{ outline:none; border-color:var(--teal); }
-  .order-input.filled{ border-color:var(--teal-dark); color:var(--teal-dark); }
-  .sort-row{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    margin:0 0 14px;
+  .order-input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(47,111,98,.12); }
+  .order-input.filled{ border-color:var(--teal-dark); color:var(--teal-dark); background:var(--teal-pale); }
+
+  .time-area{ margin-left:auto; display:flex; align-items:center; gap:5px; min-width:0; }
+  .time-value{
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600;
+    color:var(--teal-dark); text-align:right; line-height:20px; white-space:nowrap;
+    /* 불러오기로 들어온 시각 값은 40자까지 허용되므로, 길면 잘라서
+       삭제 버튼이 화면 밖으로 밀려나지 않게 한다 */
+    min-width:0; overflow:hidden; text-overflow:ellipsis;
   }
-  .sort-row .hint{ font-size:11.5px; color:var(--ink-soft); line-height:1.5; }
-  .sort-btn{
-    flex-shrink:0; font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-    font-size:12.5px; font-weight:700; padding:9px 12px;
-    border:1.5px solid var(--teal-dark); background:#fff; color:var(--teal-dark);
-    cursor:pointer; white-space:nowrap;
+  /* '미기록'은 한글이라 IBM Plex Mono에 글자가 없어 대체 폰트가 크게 렌더링됨
+     → 카드 머리 높이가 들쭉날쭉해지지 않도록 한글 전용 폰트를 직접 지정 */
+  /* 클래스 이름을 no-time 으로 분리한다. v23까지는 이 수식자가 'empty' 라서
+     빈 상태 안내문용 전역 .empty{padding:40px 20px} 가 그대로 먹었고,
+     그 결과 시각이 없는 카드의 머리 높이가 100px 넘게 부풀어 있었음. */
+  .time-value.no-time{
+    color:var(--ink-faint); font-weight:500; font-size:11.5px;
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
   }
-  .sort-btn:active{ background:var(--teal-dark); color:#fff; }
+  .time-btn{
+    font-size:11px; font-weight:700; padding:5px 8px; white-space:nowrap; flex-shrink:0;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--field); color:var(--teal-dark); cursor:pointer;
+  }
+  .time-btn:active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; }
+  /* 카드 삭제 (v24) */
+  .card-del{
+    flex-shrink:0; width:28px; height:28px; margin-left:1px;
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid transparent; border-radius:var(--r-sm);
+    background:transparent; color:var(--ink-faint); cursor:pointer;
+  }
+  .card-del svg{ width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .card-del:active{ background:var(--brick-pale); border-color:var(--brick); color:var(--brick); }
+
+  .card-body{ padding:13px 14px 15px; display:flex; flex-direction:column; gap:11px; }
+  .field label{
+    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:12px; font-weight:500; color:var(--ink-soft); margin-bottom:5px;
+  }
+  /* 글자수 표시는 평소엔 숨기고, 입력 중이거나 한도에 가까울 때만 보여준다
+     (레이아웃이 흔들리지 않도록 display 가 아니라 opacity 로 처리) */
+  .field label .cnt{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ink-faint);
+    opacity:0; transition:opacity .15s ease;
+  }
+  .field.focused label .cnt, .field label .cnt.near{ opacity:1; }
+  .field label .cnt.warn{ opacity:1; color:var(--brick); font-weight:600; }
+  .field input, .field textarea{
+    width:100%; border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--field); padding:10px 11px; font-size:14.5px;
+    color:var(--ink); resize:none;
+  }
+  .field textarea{ min-height:56px; line-height:1.5; }
+  .field input:focus, .field textarea:focus{
+    outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(47,111,98,.12);
+  }
+  .field.flag input, .field.flag textarea{ border-color:#E0D0B4; background:#FDFAF3; }
+  .field.flag input:focus, .field.flag textarea:focus{ border-color:#C9A96A; box-shadow:0 0 0 3px rgba(201,169,106,.16); }
+  .addr-row{ display:flex; gap:6px; }
+  .addr-row input{ flex:1; min-width:0; }
+  .tmap-btn{
+    flex-shrink:0; display:flex; align-items:center; gap:4px; white-space:nowrap;
+    font-size:12.5px; font-weight:700; padding:0 12px; cursor:pointer;
+    border:1px solid var(--teal-dark); border-radius:var(--r-sm);
+    background:var(--teal-pale); color:var(--teal-dark);
+  }
+  .tmap-btn:active{ background:var(--teal-dark); color:#fff; }
+  .tmap-btn.loading{ opacity:.55; pointer-events:none; }
+
+  /* 구간 경로 — 앞뒤 카드에 주소가 모두 있을 때만 나타난다 (v24) */
   .segment-connector{
     display:flex; align-items:center; justify-content:center;
-    margin: -6px 0 16px; position:relative; z-index:1;
+    margin:-4px 0 12px; position:relative; z-index:1;
   }
   .segment-btn{
     font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600;
-    padding:6px 14px; border-radius:999px;
-    border:1.5px solid var(--teal-dark); background:var(--teal-pale); color:var(--teal-dark);
-    cursor:pointer; display:flex; align-items:center; gap:6px;
+    padding:6px 14px; border-radius:var(--r-pill); cursor:pointer;
+    border:1px solid rgba(27,74,64,.28); background:var(--teal-pale); color:var(--teal-dark);
+    display:flex; align-items:center; gap:6px;
   }
   .segment-btn:active{ background:var(--teal-dark); color:#fff; }
   .segment-btn.loading{ opacity:.55; pointer-events:none; }
   .segment-btn .arrow{ font-size:13px; }
-  .stub-label{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px; letter-spacing:.1em; color:var(--ink-soft); text-transform:uppercase;
-  }
-  .time-area{ margin-left:auto; display:flex; align-items:center; gap:8px; }
-  .time-value{
-    font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600;
-    color:var(--teal-dark); min-width:56px; text-align:right;
-    /* 카드 헤더 높이가 항상 일정하도록 줄 높이 고정 */
-    line-height:20px;
-  }
-  .time-value.empty{
-    color:var(--line); font-weight:500;
-    /* '미기록'은 한글이라 IBM Plex Mono(고정폭 영문 폰트)에 글자가 없어서
-       브라우저가 대체 폰트를 훨씬 크게 렌더링해 카드 헤더 높이가 들쭉날쭉해지는
-       문제가 있었음 → 한글 전용 폰트를 직접 지정해 항상 일정한 높이를 유지 */
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-  }
-  .time-value.empty{ color:var(--line); font-weight:500; }
-  .time-btn{
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-size:11.5px; font-weight:700;
-    border:1.5px solid var(--teal-dark); background:#fff; color:var(--teal-dark);
-    padding:6px 10px; cursor:pointer; white-space:nowrap;
-  }
-  .time-btn:active{ background:var(--teal-dark); color:#fff; }
-  .card-body{ padding:14px; display:flex; flex-direction:column; gap:12px; }
-  .field label{
-    display:flex; justify-content:space-between; align-items:baseline;
-    font-size:12.5px; font-weight:500; color:var(--ink-soft); margin-bottom:5px;
-  }
-  .field label .cnt{
-    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft);
-  }
-  .field label .cnt.warn{ color:var(--brick); }
-  .field input, .field textarea{
-    width:100%; border:1.3px solid var(--line); background:#fff;
-    padding:9px 10px; font-size:14.5px; font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-    color:var(--ink); resize:none;
-  }
-  .field textarea{ min-height:52px; line-height:1.4; }
-  .field input:focus, .field textarea:focus{ outline:none; border-color:var(--teal); }
-  .field.flag input, .field.flag textarea{ border-color:#DCC9A8; background:#FBF6EC; }
-  .addr-row{ display:flex; gap:6px; }
-  .addr-row input{ flex:1; min-width:0; }
-  .tmap-btn{
-    flex-shrink:0; display:flex; align-items:center; gap:4px;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-size:12.5px; font-weight:700;
-    border:1.5px solid var(--teal-dark); background:#fff; color:var(--teal-dark);
-    padding:0 11px; cursor:pointer; white-space:nowrap;
-  }
-  .tmap-btn:active{ background:var(--teal-dark); color:#fff; }
-  .tmap-btn.loading{ opacity:.55; pointer-events:none; }
-  .nav-pref-row{ align-items:center; }
-  .nav-pref-toggle{ display:flex; border:1.3px solid var(--line); overflow:hidden; }
-  .nav-pref-btn{
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif; font-size:12.5px; font-weight:700;
-    border:none; background:#fff; color:var(--ink-soft); padding:5px 12px; cursor:pointer;
-  }
-  .nav-pref-btn + .nav-pref-btn{ border-left:1.3px solid var(--line); }
-  .nav-pref-btn.active{ background:var(--teal-dark); color:#fff; }
 
-  .save-row{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:0 4px; margin:-4px 0 14px;
-    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
+  .add-card-btn{
+    display:block; width:100%;
+    padding:13px; margin-bottom:8px; border-radius:var(--r-md);
+    background:transparent; color:var(--teal-dark);
+    border:1px dashed var(--line-strong);
+    font-size:13.5px; font-weight:700; cursor:pointer;
   }
-  .save-row .dot{ width:6px;height:6px;border-radius:50%; background:var(--teal); display:inline-block; margin-right:6px; }
-  .backup-row{ margin:0 0 14px; padding:8px 4px 0; border-top:1px dashed var(--line); }
-  .switch-label{ display:flex; align-items:center; gap:7px; cursor:pointer; color:var(--ink-soft); }
-  .switch-label input[type=checkbox]{ width:14px;height:14px; accent-color:var(--teal-dark); cursor:pointer; }
+  .add-card-btn:active{ background:var(--paper-2); border-color:var(--teal-dark); }
+  .add-card-btn[disabled]{ opacity:.55; border-style:solid; color:var(--ink-faint); cursor:default; }
 
-  .modal-overlay{
-    position:fixed; inset:0; z-index:50;
-    background:rgba(35,47,59,.55);
-    display:flex; align-items:center; justify-content:center;
-    padding:24px;
+  /* -------------------------------- 메모 ------------------------------- */
+  .memo-panel{
+    background:var(--card); border:1px solid var(--line);
+    border-radius:var(--r-lg); box-shadow:var(--sh-2);
+    padding:14px; margin-bottom:12px;
   }
-  .modal-box{
-    background:var(--card); border:1.5px solid var(--ink);
-    box-shadow:4px 4px 0 var(--line);
-    width:100%; max-width:340px; padding:18px 18px 16px;
+  .memo-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .memo-label{
+    font-family:'Noto Serif KR','Malgun Gothic',serif; font-weight:700; font-size:15px;
+    color:var(--brick);
   }
-  .modal-msg{
-    font-size:13.5px; line-height:1.6; color:var(--ink);
-    white-space:pre-line; margin-bottom:14px;
+  .memo-count{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-faint); }
+  .memo-count.warn{ color:var(--brick); font-weight:600; }
+  .memo-textarea{
+    width:100%; min-height:300px; resize:vertical;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm); background:var(--field);
+    padding:12px; font-size:14.5px; line-height:1.65; color:var(--ink);
   }
-  .modal-input{
-    width:100%; box-sizing:border-box; border:1.5px solid var(--ink); background:#fff;
-    padding:10px 12px; font-size:15px;
-    font-family:'IBM Plex Mono',monospace; color:var(--ink);
-    margin-bottom:14px;
-  }
-  .modal-input:focus{ outline:none; border-color:var(--teal); }
-  .modal-actions{ display:flex; gap:8px; }
-  .modal-actions button{
-    flex:1; padding:11px; font-size:14px; font-weight:700; cursor:pointer;
-    border:1.5px solid var(--ink);
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-  }
-  .modal-cancel{ background:var(--card); color:var(--ink); }
-  .modal-ok{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
-  .modal-actions-col{ flex-direction:column; margin-bottom:10px; }
-  .modal-actions-col button{ width:100%; }
-  .modal-code{
-    font-family:'IBM Plex Mono',monospace; font-weight:600;
-    font-size:34px; letter-spacing:6px; text-align:center;
-    color:var(--teal-dark); background:#fff;
-    border:1.5px solid var(--ink); padding:14px 8px; margin-bottom:14px;
-  }
+  .memo-textarea:focus{ outline:none; border-color:var(--brick); box-shadow:0 0 0 3px rgba(166,61,64,.12); }
 
-  .actionbar{
-    position:fixed; bottom:0; left:0; right:0; z-index:5;
-    display:flex; gap:8px;
-    padding:12px 14px calc(12px + env(safe-area-inset-bottom));
-    background:var(--paper); border-top:2px solid var(--ink);
-    box-shadow: 0 -6px 18px -12px rgba(20,30,25,.35);
-  }
-  .actionbar button{
-    flex:1; padding:12px 3px; font-size:12px; font-weight:700;
-    border:1.5px solid var(--ink); border-radius:8px; cursor:pointer;
-    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-    white-space:normal; line-height:1.25;
-  }
-  .actionbar button:active{ transform:translateY(1px); }
-  .btn-share{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
-  .btn-copy{ background:var(--card); color:var(--ink); }
-
+  /* ------------------------------ 지난 기록 ----------------------------- */
   .history{ display:none; }
   .history.show{ display:block; }
   .hist-item{
-    display:flex; justify-content:space-between; align-items:center;
-    padding:12px 14px; background:var(--card); border:1.3px solid var(--line); border-radius:8px;
-    margin-bottom:8px; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:13px 14px; background:var(--card);
+    border:1px solid var(--line); border-radius:var(--r-md);
+    margin-bottom:8px; cursor:pointer; box-shadow:var(--sh-1);
   }
-  .hist-item:active{ border-color:var(--ink); background:var(--paper-2); }
+  .hist-item:active{ border-color:var(--teal); background:var(--paper-2); }
   .hist-date{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13.5px; }
-  .hist-meta{ font-size:12px; color:var(--ink-soft); }
+  .hist-meta{ font-size:12px; color:var(--ink-faint); margin-top:2px; }
   .hist-count{
-    font-family:'IBM Plex Mono',monospace; font-size:11px;
-    border:1px solid var(--teal-dark); color:var(--teal-dark); border-radius:4px;
-    padding:2px 7px;
+    font-family:'IBM Plex Mono',monospace; font-size:11px; flex-shrink:0;
+    border:1px solid rgba(27,74,64,.28); background:var(--teal-pale);
+    color:var(--teal-dark); border-radius:var(--r-pill); padding:3px 9px;
   }
-  .empty{
-    text-align:center; padding:40px 20px; color:var(--ink-soft); font-size:13.5px;
-  }
+  .empty{ text-align:center; padding:44px 20px; color:var(--ink-faint); font-size:13.5px; }
   .day-view{ display:block; }
-  .day-view.hide{ display:none; }
 
-  .toast{
-    position:fixed; left:50%; bottom:96px; transform:translateX(-50%) translateY(20px);
-    background:var(--ink); color:var(--paper); padding:10px 18px;
-    font-size:13px; font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
-    opacity:0; transition:all .25s ease; z-index:20; white-space:nowrap;
-    max-width:92vw; overflow:hidden; text-overflow:ellipsis;
+  /* -------------------------------- 모달 ------------------------------- */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:50;
+    background:rgba(24,36,31,.5);
+    display:flex; align-items:center; justify-content:center;
+    padding:22px;
+    animation:modal-fade .14s ease;
   }
-  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @keyframes modal-fade{ from{opacity:0;} to{opacity:1;} }
+  .modal-box{
+    background:var(--card); border:1px solid var(--line-strong);
+    border-radius:var(--r-lg); box-shadow:var(--sh-3);
+    width:100%; max-width:340px; padding:18px;
+    max-height:88vh; overflow-y:auto;
+  }
+  .modal-title{ font-size:15.5px; font-weight:700; color:var(--ink); margin-bottom:9px; line-height:1.4; }
+  .modal-msg{ font-size:13px; line-height:1.65; color:var(--ink-soft); white-space:pre-line; margin-bottom:16px; }
+  .modal-quote{
+    font-size:13.5px; font-weight:600; color:var(--ink);
+    background:var(--paper-2); border-radius:var(--r-sm);
+    padding:9px 11px; margin-bottom:10px; word-break:break-all; white-space:normal;
+  }
+  .modal-actions{ display:flex; gap:8px; }
+  .modal-actions button{
+    flex:1; padding:11px; font-size:14px; font-weight:700; cursor:pointer;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+  }
+  .modal-cancel{ background:var(--card); color:var(--ink-soft); }
+  .modal-cancel:active{ background:var(--paper-2); }
+  .modal-ok{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
+  .modal-danger{ background:var(--brick); border-color:var(--brick); color:#fff; }
+
+  .sheet-list{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .sheet-item{
+    display:flex; flex-direction:column; gap:3px; text-align:left; width:100%;
+    padding:12px 13px; cursor:pointer;
+    border:1px solid var(--line); border-radius:var(--r-sm);
+    background:var(--field);
+  }
+  .sheet-item:active{ background:var(--teal-pale); border-color:var(--teal-dark); }
+  .sheet-item-title{ font-size:14px; font-weight:700; color:var(--ink); }
+  .sheet-item-desc{ font-size:11.5px; color:var(--ink-faint); line-height:1.45; }
+
+  /* ------------------------------ 하단 바 ------------------------------ */
+  .actionbar{
+    position:fixed; bottom:0; left:0; right:0; z-index:5;
+    display:flex; gap:8px;
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    background:rgba(238,241,235,.94);
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+    border-top:1px solid var(--line-strong);
+  }
+  .actionbar button{
+    flex:1; padding:12px 4px; font-size:13.5px; font-weight:700; cursor:pointer;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    white-space:nowrap; line-height:1.2;
+    display:flex; align-items:center; justify-content:center; gap:5px;
+  }
+  .actionbar button:active{ transform:translateY(1px); }
+  .actionbar button svg{ width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+  .btn-share{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); box-shadow:var(--sh-2); }
+  .btn-copy{ background:var(--card); color:var(--ink); box-shadow:var(--sh-1); }
+  .btn-copy:active{ background:var(--paper-2); }
+
+  /* -------------------------------- 토스트 ------------------------------ */
+  .toast{
+    position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(16px);
+    background:var(--ink); color:var(--paper);
+    padding:11px 14px; border-radius:var(--r-md); box-shadow:var(--sh-3);
+    font-size:13px; opacity:0; pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+    z-index:60; max-width:92vw;
+    display:flex; align-items:center; gap:12px;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  .toast-msg{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .toast-action{
+    flex-shrink:0; font-size:12.5px; font-weight:700; cursor:pointer;
+    padding:5px 10px; border-radius:var(--r-sm);
+    border:1px solid rgba(255,255,255,.35); background:transparent; color:#fff;
+  }
+  .toast-action:active{ background:rgba(255,255,255,.16); }
+
+  /* 태블릿·PC에서 열었을 때 한 줄이 화면 끝까지 늘어나지 않도록 폭 제한 */
+  @media (min-width: 620px){
+    header > *, main{ max-width:560px; margin-left:auto; margin-right:auto; }
+    .actionbar{
+      padding-left:calc((100% - 560px) / 2);
+      padding-right:calc((100% - 560px) / 2);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+  }
 </style>
 </head>
 <body>
 <div class="bg-texture"></div>
 
 <header>
-  <div class="eyebrow-row">
-    <div class="eyebrow">FIELD VISIT LOG · 방문일지 <span class="ver-tag">v23</span></div>
+  <div class="app-bar">
+    <h1 class="brand">방문일지<span class="ver-tag">v24</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
-  <h1 id="mainTitle">오늘의 방문 기록</h1>
   <div class="date-nav">
-    <button id="prevDay" type="button">‹</button>
+    <button id="prevDay" type="button" aria-label="이전 날짜">‹</button>
     <div class="date-display">
-      <span class="weekday" id="weekdayLabel">월</span>
       <input type="date" id="dateInput">
+      <span class="weekday" id="weekdayLabel">(월)</span>
     </div>
-    <button id="nextDay" type="button">›</button>
+    <button id="nextDay" type="button" aria-label="다음 날짜">›</button>
   </div>
   <div class="period-toggle" id="periodToggle">
     <button type="button" class="period-btn" data-view="AM">오전<span class="period-count" id="periodCountAM"></span></button>
@@ -655,7 +795,15 @@
 </header>
 
 <main>
-  <div class="search-bar">
+  <div class="viewbar">
+    <button id="tabDay" class="active" type="button">오늘 기록</button>
+    <button id="tabHistory" type="button">지난 기록</button>
+    <button id="searchToggle" class="icon-btn" type="button" aria-label="빠른 검색">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+    </button>
+  </div>
+
+  <div class="search-bar" id="searchBar">
     <select id="searchScope" aria-label="검색 범위">
       <option value="all">전체</option>
       <option value="visitor">담당자명</option>
@@ -664,15 +812,9 @@
       <option value="changed">변경상호</option>
       <option value="note">특이사항</option>
     </select>
-    <input type="text" id="searchInput" placeholder="빠른 검색 (주소·상호·담당자 등)"
+    <input type="text" id="searchInput" placeholder="주소·상호·담당자 검색"
            enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false">
     <button id="searchBtn" type="button">검색</button>
-    <button id="searchClear" class="search-clear" type="button" style="display:none">닫기</button>
-  </div>
-
-  <div class="toolbar">
-    <button id="tabDay" class="active" type="button">오늘 기록</button>
-    <button id="tabHistory" type="button">지난 기록</button>
   </div>
 
   <div id="searchView" class="search-view">
@@ -681,26 +823,34 @@
   </div>
 
   <div id="dayView" class="day-view">
-    <div class="save-row"><span><span class="dot"></span>자동 저장됨</span><span id="lastSaved">—</span></div>
-    <div class="save-row backup-row">
-      <label class="switch-label">
-        <input type="checkbox" id="autoBackupToggle" checked>
-        <span>5분마다 자동 임시저장 (기기 내부)</span>
-      </label>
-      <span id="lastBackup">—</span>
+    <div class="status-row">
+      <span class="status-left"><span class="dot"></span><span id="lastSaved">—</span></span>
+      <button type="button" class="gear-btn" id="settingsToggle" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2.2"></circle><circle cx="10" cy="17" r="2.2"></circle></svg>설정
+      </button>
     </div>
-    <div class="save-row nav-pref-row">
-      <span>내비게이션 앱</span>
-      <div class="nav-pref-toggle" id="navPrefToggle">
-        <button type="button" class="nav-pref-btn" data-nav="tmap">T맵</button>
-        <button type="button" class="nav-pref-btn" data-nav="naver">네이버맵</button>
+
+    <div class="settings-panel hide" id="settingsPanel">
+      <label class="setting-item switch-label">
+        <input type="checkbox" id="autoBackupToggle" checked>
+        <span class="setting-text">5분마다 자동 임시저장<small>기기 안에만 조용히 저장돼요</small></span>
+        <span class="setting-val" id="lastBackup">—</span>
+      </label>
+      <div class="setting-item">
+        <span class="setting-text">내비게이션 앱<small>카드의 길찾기 버튼에 쓰여요</small></span>
+        <div class="nav-pref-toggle" id="navPrefToggle">
+          <button type="button" class="nav-pref-btn" data-nav="tmap">T맵</button>
+          <button type="button" class="nav-pref-btn" data-nav="naver">네이버맵</button>
+        </div>
       </div>
     </div>
+
     <div id="visitsPanel">
-      <div class="sort-row">
-        <div class="hint">각 카드의 <b>순서</b> 칸에 방문 순서를 적고<br>정렬하면 그 순서대로 카드가 재배열돼요</div>
+      <div class="section-head">
+        <div class="section-title">방문 카드 <span class="section-count" id="cardCount">4</span></div>
         <button type="button" id="sortByOrderBtn" class="sort-btn">↓ 순서대로 정렬</button>
       </div>
+      <p class="sort-hint" id="sortHint">각 카드의 <b>순서</b> 칸에 방문 순서를 적고 정렬을 누르면 그 순서대로 재배열돼요.</p>
       <div id="cardsWrap"></div>
       <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
     </div>
@@ -721,10 +871,10 @@
 </main>
 
 <div class="actionbar" id="actionbar">
-  <button class="btn-copy" id="importBtn" type="button">불러오기</button>
+  <button class="btn-copy" id="fileMenuBtn" type="button">
+    파일<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14l6-6 6 6"></path></svg>
+  </button>
   <button class="btn-copy" id="copyBtn" type="button">복사</button>
-  <button class="btn-copy" id="importXlsxBtn" type="button">주소 가져오기</button>
-  <button class="btn-copy" id="exportXlsxBtn" type="button">주소 내보내기</button>
   <button class="btn-share" id="shareBtn" type="button">저장</button>
 </div>
 <input type="file" id="importFile" accept=".txt,.json,.html,.htm,text/plain,application/json,text/html" style="display:none">
@@ -848,6 +998,7 @@ function weekdayKR(dateStr){
   _weekdayCache[dateStr] = r;
   return r;
 }
+function weekdayShortKR(dateStr){ return '(' + weekdayKR(dateStr).charAt(0) + ')'; }
 function keyFor(dateStr, period){ return 'visit-log:'+dateStr+':'+(period||currentPeriod); }
 function legacyKeyFor(dateStr){ return 'visit-log:'+dateStr; } // v19 이전 형식(오전/오후 구분 없음)
 
@@ -861,7 +1012,9 @@ function normalizeVisits(parsed){
   if (Array.isArray(parsed)) raw = parsed;
   else if (parsed && Array.isArray(parsed.visits)) raw = parsed.visits;
   if (!raw || raw.length === 0) return emptyVisits();
-  const len = Math.min(MAX_VISIT_COUNT, Math.max(DEFAULT_VISIT_COUNT, raw.length));
+  // v24: 저장된 카드 개수를 그대로 살린다. v23까지는 최소 4개로 강제 보정해서
+  // 카드를 4개 아래로 지워도 다시 열면 빈 카드가 되살아났음.
+  const len = Math.min(MAX_VISIT_COUNT, Math.max(1, raw.length));
   const fixed = emptyVisits(len);
   for (let i = 0; i < Math.min(len, raw.length); i++){
     const src = raw[i];
@@ -894,19 +1047,114 @@ async function saveSettings(){
 }
 
 let toastTimer = null;
-function showToast(msg){
+// action 이 있으면 토스트에 버튼을 하나 붙이고 노출 시간을 늘린다 (카드 삭제 되돌리기용)
+function showToast(msg, action){
   const t = $('toast');
-  t.textContent = msg;
+  t.innerHTML = '';
+  const span = document.createElement('span');
+  span.className = 'toast-msg';
+  span.textContent = msg;
+  t.appendChild(span);
+  if(action){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action';
+    btn.textContent = action.label;
+    btn.addEventListener('click', ()=>{ hideToast(); action.run(); });
+    t.appendChild(btn);
+  }
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
+  toastTimer = setTimeout(hideToast, action ? 6000 : 1800);
+}
+function hideToast(){
+  clearTimeout(toastTimer);
+  $('toast').classList.remove('show');
+}
+
+// ---------------- 앱 내부 모달 (v15와 같은 이유: 설치형 PWA에서 window.confirm 이
+// 아예 안 뜨는 경우가 있어, 확인창을 앱 안에 직접 만들어 쓴다) ----------------
+let modalState = null;
+function onModalKey(e){ if(e.key === 'Escape'){ e.preventDefault(); closeModal(); } }
+function closeModal(){
+  if(!modalState) return;
+  const s = modalState;
+  modalState = null;
+  s.el.remove();
+  document.removeEventListener('keydown', onModalKey);
+  document.body.style.overflow = s.prevOverflow || '';
+  if(s.onClose) s.onClose();
+}
+function openModal(innerHtml, opts){
+  closeModal();
+  opts = opts || {};
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal-box" role="dialog" aria-modal="true"></div>';
+  overlay.firstChild.innerHTML = innerHtml;
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+  modalState = { el: overlay, onClose: opts.onClose, prevOverflow: document.body.style.overflow };
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('keydown', onModalKey);
+  if(opts.setup) opts.setup(overlay);
+  return overlay;
+}
+
+// window.confirm 대체. 취소/바깥 클릭/Esc 는 모두 false 로 확정된다.
+function appConfirm(opts){
+  return new Promise((resolve)=>{
+    let settled = false;
+    const finish = (v)=>{ if(settled) return; settled = true; resolve(v); };
+    const html =
+      '<div class="modal-title">' + escapeHtml(opts.title || '확인') + '</div>'
+      + '<div class="modal-msg">' + (opts.html || escapeHtml(opts.msg || '')) + '</div>'
+      + '<div class="modal-actions">'
+      +   '<button type="button" class="modal-cancel" data-cancel>' + escapeHtml(opts.cancelText || '취소') + '</button>'
+      +   '<button type="button" class="modal-ok' + (opts.danger ? ' modal-danger' : '') + '" data-ok>' + escapeHtml(opts.okText || '확인') + '</button>'
+      + '</div>';
+    openModal(html, {
+      onClose: ()=>finish(false),
+      setup: (root)=>{
+        root.querySelector('[data-cancel]').addEventListener('click', ()=>{ finish(false); closeModal(); });
+        root.querySelector('[data-ok]').addEventListener('click', ()=>{ finish(true); closeModal(); });
+      }
+    });
+  });
+}
+
+// 항목 목록형 모달 (하단 [파일] 메뉴)
+function openSheet(title, items){
+  const html =
+    '<div class="modal-title">' + escapeHtml(title) + '</div>'
+    + '<div class="sheet-list">'
+    + items.map((it, i)=>
+        '<button type="button" class="sheet-item" data-i="' + i + '">'
+        + '<span class="sheet-item-title">' + escapeHtml(it.title) + '</span>'
+        + '<span class="sheet-item-desc">' + escapeHtml(it.desc) + '</span>'
+        + '</button>').join('')
+    + '</div>'
+    + '<div class="modal-actions"><button type="button" class="modal-cancel" data-cancel>닫기</button></div>';
+  openModal(html, {
+    setup: (root)=>{
+      root.querySelectorAll('.sheet-item').forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+          const it = items[parseInt(btn.dataset.i, 10)];
+          // 파일 선택창은 사용자 클릭 흐름 안에서 바로 열어야 하므로 지연시키지 않는다
+          closeModal();
+          if(it && it.run) it.run();
+        });
+      });
+      root.querySelector('[data-cancel]').addEventListener('click', closeModal);
+    }
+  });
 }
 
 async function loadDate(dateStr, period){
   currentDate = dateStr;
   if(period){ currentPeriod = period; currentView = period; }
   $('dateInput').value = dateStr;
-  $('weekdayLabel').textContent = weekdayKR(dateStr);
+  $('weekdayLabel').textContent = weekdayShortKR(dateStr);
   updatePeriodUI();
   try{
     let res = await storage.get(keyFor(dateStr, currentPeriod));
@@ -941,12 +1189,6 @@ function updatePeriodUI(){
       visitsPanel.classList.remove('hide');
       memoPanel.classList.add('hide');
     }
-  }
-  const title = $('mainTitle');
-  if(title){
-    title.textContent = currentView === 'MEMO'
-      ? '오늘의 메모'
-      : (currentView === 'AM' ? '오전' : '오후') + ' 방문 기록';
   }
 }
 
@@ -1083,27 +1325,104 @@ function sortByOrder(){
 }
 $('sortByOrderBtn').addEventListener('click', sortByOrder);
 
+// 아이콘은 외부 파일 없이 인라인 SVG 로 (오프라인 PWA 유지)
+const ICON_TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+  + '<path d="M4 7h16"></path>'
+  + '<path d="M9.5 7V5.2c0-.7.5-1.2 1.2-1.2h2.6c.7 0 1.2.5 1.2 1.2V7"></path>'
+  + '<path d="M6.5 7l.8 11.4c.05.9.8 1.6 1.7 1.6h6c.9 0 1.65-.7 1.7-1.6L17.5 7"></path>'
+  + '<path d="M10.5 11.5v5M13.5 11.5v5"></path></svg>';
+
+// ---------------- 카드 삭제 (v24) ----------------
+// 내용이 있는 카드만 확인창을 띄우고, 지운 뒤 6초간 '되돌리기'를 제공한다.
+async function deleteVisitCard(idx){
+  const visit = currentVisits[idx];
+  if(!visit) return;
+  if(currentVisits.length <= 1){
+    showToast('카드는 최소 1개는 있어야 합니다');
+    return;
+  }
+  const hasContent = addrFilled(visit.addr) || visit.name || visit.changed
+    || visit.note || visit.time || visit.visitor;
+  if(hasContent){
+    const label = (visit.name || visit.visitor || visit.addr || '').trim();
+    const ok = await appConfirm({
+      title: '방문 ' + (idx+1) + ' 카드를 삭제할까요?',
+      html: (label ? '<div class="modal-quote">' + escapeHtml(label.slice(0, 60)) + '</div>' : '')
+            + '삭제하면 이 카드에 적은 내용이 사라집니다.\n뒤 카드들의 번호는 하나씩 당겨집니다.',
+      okText: '삭제', cancelText: '취소', danger: true,
+    });
+    if(!ok) return;
+  }
+  const removed = Object.assign({}, visit);
+  let padded = false;
+  currentVisits.splice(idx, 1);
+  if(currentVisits.length === 0){ currentVisits = emptyVisits(1); padded = true; }
+  renderCards();
+  await saveCurrent();
+  showToast('방문 ' + (idx+1) + ' 카드를 삭제했습니다', {
+    label: '되돌리기',
+    run: async ()=>{
+      if(currentVisits.length >= MAX_VISIT_COUNT){
+        showToast('카드가 최대 ' + MAX_VISIT_COUNT + '개라 되돌릴 수 없습니다');
+        return;
+      }
+      // 마지막 한 장을 지워서 자동으로 채워 넣었던 빈 카드는 걷어낸다
+      // (그 사이 사용자가 뭔가 적었다면 그대로 둔다)
+      if(padded && currentVisits.length === 1 && !hasAnyData(currentVisits)) currentVisits = [];
+      currentVisits.splice(Math.min(idx, currentVisits.length), 0, removed);
+      renderCards();
+      await saveCurrent();
+      showToast('삭제를 되돌렸습니다');
+    }
+  });
+}
+
+// 구간 경로 버튼은 앞뒤 카드에 주소가 모두 있을 때만 보여준다 (v24)
+let segConnectors = [];
+function refreshConnectors(){
+  segConnectors.forEach((c)=>{
+    const a = currentVisits[c.i], b = currentVisits[c.i + 1];
+    const ready = !!(a && b && addrFilled(a.addr) && addrFilled(b.addr));
+    c.el.classList.toggle('hide', !ready);
+  });
+}
+
+// 정렬 안내문은 '순서'를 한 번도 쓰지 않은 상태에서만 보여준다 (v24)
+function refreshSortHint(){
+  const hint = $('sortHint');
+  if(!hint) return;
+  hint.classList.toggle('hide', currentVisits.some(v => (v.order || '').trim() !== ''));
+}
+
 function renderCards(){
   const wrap = $('cardsWrap');
   wrap.innerHTML = '';
+  segConnectors = [];
+  const canDelete = currentVisits.length > 1;
   currentVisits.forEach((visit, idx) => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `
-      <div class="card-head">
-        <div class="stub-num">${idx+1}</div>
-        <div class="stub-label">방문 ${idx+1} / ${currentVisits.length}</div>
-        <div class="order-area">
-          <label for="order-${idx}">순서</label>
-          <input type="text" inputmode="numeric" pattern="[0-9]*" class="order-input" id="order-${idx}" data-order-input maxlength="3" placeholder="-">
-        </div>
-        <div class="time-area">
-          <span class="time-value ${visit.time ? '' : 'empty'}" data-time-display>${escapeHtml(visit.time || '미기록')}</span>
-          <button type="button" class="time-btn" data-time-btn>재기록</button>
-        </div>
-      </div>
-      <div class="card-body"></div>
-    `;
+    card.innerHTML =
+      '<div class="card-head">'
+      +   '<div class="stub-num">' + (idx+1) + '</div>'
+      +   '<div class="order-area">'
+      +     '<label for="order-' + idx + '">순서</label>'
+      +     '<input type="text" inputmode="numeric" pattern="[0-9]*" class="order-input"'
+      +       ' id="order-' + idx + '" data-order-input maxlength="3" placeholder="-">'
+      +   '</div>'
+      +   '<div class="time-area">'
+      +     '<span class="time-value ' + (visit.time ? '' : 'no-time') + '" data-time-display>'
+      +       escapeHtml(visit.time || '미기록')
+      +     '</span>'
+      +     '<button type="button" class="time-btn" data-time-btn>재기록</button>'
+      +     (canDelete
+          ? '<button type="button" class="card-del" data-del-btn title="이 카드 삭제"'
+            + ' aria-label="방문 ' + (idx+1) + ' 카드 삭제">' + ICON_TRASH + '</button>'
+          : '')
+      +   '</div>'
+      + '</div>'
+      + '<div class="card-body"></div>';
+
     const orderInput = card.querySelector('[data-order-input]');
     orderInput.value = visit.order || '';
     orderInput.classList.toggle('filled', !!visit.order);
@@ -1112,15 +1431,17 @@ function renderCards(){
       e.target.value = v;
       currentVisits[idx].order = v;
       orderInput.classList.toggle('filled', !!v);
+      refreshSortHint();
       scheduleSave();
     });
+
     const timeBtn = card.querySelector('[data-time-btn]');
     const timeDisplay = card.querySelector('[data-time-display]');
     const stampTime = ()=>{
       const stamped = nowHHMMSS();
       currentVisits[idx].time = stamped;
       timeDisplay.textContent = stamped;
-      timeDisplay.classList.remove('empty');
+      timeDisplay.classList.remove('no-time');
       return stamped;
     };
     timeBtn.addEventListener('click', ()=>{
@@ -1129,6 +1450,10 @@ function renderCards(){
       scheduleSave();
       showToast('방문 '+(idx+1)+' 시각 기록: '+stamped);
     });
+
+    const delBtn = card.querySelector('[data-del-btn]');
+    if(delBtn) delBtn.addEventListener('click', ()=>deleteVisitCard(idx));
+
     const body = card.querySelector('.card-body');
     FIELD_META.forEach(meta => {
       const field = document.createElement('div');
@@ -1142,18 +1467,18 @@ function renderCards(){
         +' data-lpignore="true" data-1p-ignore="true" data-form-type="other"'
         +' autocorrect="off" spellcheck="false"'
         +' placeholder="'+meta.label+' 입력"';
+      const labelHtml = '<label for="'+fieldId+'">'+meta.label
+        +' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>';
       if(meta.type === 'textarea'){
-        field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
-          + '<textarea '+common+'></textarea>';
+        field.innerHTML = labelHtml + '<textarea '+common+'></textarea>';
       } else if(meta.key === 'addr'){
-        field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
+        field.innerHTML = labelHtml
           + '<div class="addr-row">'
           +   '<input '+common+' type="text" enterkeyhint="next">'
           +   '<button type="button" class="tmap-btn" data-nav-btn title="선택한 내비 앱으로 길찾기">'+navAppLabel()+' 길찾기</button>'
           + '</div>';
       } else {
-        field.innerHTML = '<label>'+meta.label+' <span class="cnt" data-cnt>'+val.length+'/'+meta.max+'</span></label>'
-          + '<input '+common+' type="text" enterkeyhint="next">';
+        field.innerHTML = labelHtml + '<input '+common+' type="text" enterkeyhint="next">';
       }
       if(meta.key === 'addr'){
         const navBtn = field.querySelector('[data-nav-btn]');
@@ -1161,19 +1486,29 @@ function renderCards(){
           openInNavApp(currentVisits[idx].addr, navBtn);
         });
       }
+      // 글자수는 평소엔 감춰두고 입력 중이거나 한도의 80%를 넘으면 보여준다
+      const cntEl = field.querySelector('[data-cnt]');
+      const near = Math.floor(meta.max * 0.8);
+      const syncCnt = (v)=>{
+        cntEl.textContent = v.length+'/'+meta.max;
+        cntEl.classList.toggle('near', v.length >= near);
+        cntEl.classList.toggle('warn', v.length >= meta.max);
+      };
+      syncCnt(val);
       const inputEl = field.querySelector('[data-field]');
       inputEl.value = val;
+      inputEl.addEventListener('focus', ()=>field.classList.add('focused'));
+      inputEl.addEventListener('blur', ()=>field.classList.remove('focused'));
       inputEl.addEventListener('input', (e)=>{
         currentVisits[idx][meta.key] = e.target.value;
-        const cnt = field.querySelector('[data-cnt]');
-        cnt.textContent = e.target.value.length+'/'+meta.max;
-        cnt.classList.toggle('warn', e.target.value.length >= meta.max);
+        syncCnt(e.target.value);
         // 이 방문칸에 뭔가 입력할 때마다 최신 수정 시각으로 갱신
         // (예: 10시에 상호를 적었다가, 나중에 방문지에서 변경상호를
         //  고쳐 입력하면 그 수정한 시각으로 다시 기록됨)
         if(e.target.value.trim()){
           stampTime();
         }
+        if(meta.key === 'addr') refreshConnectors();
         updateProgress();
         scheduleSave();
       });
@@ -1185,16 +1520,21 @@ function renderCards(){
     if (idx < currentVisits.length - 1) {
       const connector = document.createElement('div');
       connector.className = 'segment-connector';
-      connector.innerHTML = `<button type="button" class="segment-btn" data-seg-btn>
-        <span class="arrow">↓</span> ${idx+1}번 → ${idx+2}번 구간 경로 검색
-      </button>`;
+      connector.innerHTML = '<button type="button" class="segment-btn" data-seg-btn>'
+        + '<span class="arrow">↓</span> ' + (idx+1) + '번 → ' + (idx+2) + '번 구간 경로'
+        + '</button>';
       const segBtn = connector.querySelector('[data-seg-btn]');
       segBtn.addEventListener('click', () => openSegmentRoute(idx, idx+1, segBtn));
       wrap.appendChild(connector);
+      segConnectors.push({ el: connector, i: idx });
     }
   });
+  const cardCountEl = $('cardCount');
+  if(cardCountEl) cardCountEl.textContent = currentVisits.length;
   updateProgress();
   updateAddCardBtn();
+  refreshConnectors();
+  refreshSortHint();
 }
 
 // ---------------- 내비 앱 연동 (T맵 / 네이버맵 선택) ----------------
@@ -1207,12 +1547,24 @@ const NAVER_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.nhn.a
 const NAVER_APPNAME = 'com.atlaslab.visitlog'; // 네이버맵 URL Scheme 필수 식별자(임의 문자열 가능)
 const NAV_APP_KEY = 'visitlog_navApp';
 
+// v24: 여기만 저장소 어댑터를 안 거치고 localStorage 를 직접 쓰고 있었음.
+// 저장소가 막힌 브라우저(시크릿 모드·쿠키 차단·샌드박스 프레임)에서는
+// localStorage 접근 자체가 예외를 던지는데, 이 함수가 스크립트 최상단에서
+// updateNavPrefUI() 로 호출되는 탓에 앱 전체가 멈춰버렸다 → try/catch 로 방어.
+let navAppFallback = 'tmap';
 function getNavApp(){
-  const v = localStorage.getItem(NAV_APP_KEY);
-  return v === 'naver' ? 'naver' : 'tmap';
+  try{
+    const v = localStorage.getItem(NAV_APP_KEY);
+    return v === 'naver' ? 'naver' : 'tmap';
+  }catch(e){
+    return navAppFallback; // 저장은 안 되지만 이번 세션 동안은 선택이 유지됨
+  }
 }
 function setNavApp(app){
-  localStorage.setItem(NAV_APP_KEY, app === 'naver' ? 'naver' : 'tmap');
+  navAppFallback = app === 'naver' ? 'naver' : 'tmap';
+  try{
+    localStorage.setItem(NAV_APP_KEY, navAppFallback);
+  }catch(e){ /* 저장 실패해도 화면 갱신은 그대로 진행 */ }
   updateNavPrefUI();
   renderCards(); // 카드의 길찾기 버튼 라벨을 새 선택값으로 갱신
 }
@@ -1532,11 +1884,15 @@ function parseReportText(text){
   const periodMatch = text.match(/\[(오전|오후)\]/);
   const parsedPeriod = periodMatch ? (periodMatch[1] === '오전' ? 'AM' : 'PM') : null;
   const blocks = text.split(/\[방문\s*(\d+)\]/).slice(1); // [num, body, num, body, ...]
-  let maxNum = DEFAULT_VISIT_COUNT;
+  // v24: 텍스트 리포트에는 카드 개수가 안 적히므로 등장한 방문 번호의 최대값을 쓴다.
+  // v23까지는 최소 4장으로 보정해서, 카드를 2장으로 줄여둔 기록을 .txt로 복원하면
+  // 빈 카드 2장이 도로 붙었음. 방문 블록이 하나도 없을 때만 기본값(4장)을 쓴다.
+  let maxNum = 0;
   for(let i=0; i<blocks.length-1; i+=2){
     const n = parseInt(blocks[i], 10);
     if(n > maxNum) maxNum = n;
   }
+  if(maxNum === 0) maxNum = DEFAULT_VISIT_COUNT;
   maxNum = Math.min(MAX_VISIT_COUNT, maxNum);
   const visits = emptyVisits(maxNum);
   for(let i=0; i<blocks.length-1; i+=2){
@@ -2367,10 +2723,12 @@ async function importAddressXlsx(file){
     return v && (addrFilled(v.addr) || v.name || v.changed || v.note || v.time || v.visitor);
   });
   if(willOverwrite){
-    const ok = window.confirm(
-      '현재 카드에 이미 입력된 내용이 있습니다.\n' +
-      '엑셀의 주소 ' + items.length + '건으로 앞에서부터 덮어씁니다. 계속할까요?'
-    );
+    const ok = await appConfirm({
+      title: '이미 입력된 내용을 덮어쓸까요?',
+      msg: '엑셀의 주소 ' + items.length + '건으로 앞에서부터 덮어씁니다.\n'
+         + '덮어쓴 자리의 기존 내용은 되돌릴 수 없습니다.',
+      okText: '덮어쓰기', cancelText: '취소', danger: true,
+    });
     if(!ok) return;
   }
 
@@ -2387,7 +2745,6 @@ async function importAddressXlsx(file){
   showToast('방문주소 ' + items.length + '건을 가져왔습니다' + (truncated ? ' (최대 ' + MAX_VISIT_COUNT + '개까지만 반영됨)' : ''));
 }
 
-$('importXlsxBtn').addEventListener('click', ()=>{ $('importXlsxFile').click(); });
 $('importXlsxFile').addEventListener('change', async (e)=>{
   const file = e.target.files && e.target.files[0];
   if(!file) return;
@@ -2447,7 +2804,7 @@ async function doImport(file){
   currentView = currentPeriod;
   currentVisits = visits;
   $('dateInput').value = currentDate;
-  $('weekdayLabel').textContent = weekdayKR(currentDate);
+  $('weekdayLabel').textContent = weekdayShortKR(currentDate);
   updatePeriodUI();
   renderCards();
   await saveCurrent();
@@ -2462,7 +2819,6 @@ async function doImport(file){
   showToast(currentDate+' ('+PERIOD_LABEL[currentPeriod]+') 기록을 불러왔습니다');
 }
 
-$('importBtn').addEventListener('click', ()=>{ $('importFile').click(); });
 $('importFile').addEventListener('change', (e)=>{
   const file = e.target.files && e.target.files[0];
   if(file) doImport(file);
@@ -2554,7 +2910,8 @@ async function doSearch(){
           }
         });
         if(matched.length > 0){
-          results.push({ date: dateStr, period: period, idx: idx, visit: v, matched: matched });
+          // total: 그 기록의 실제 카드 수 (v23까지는 화면에 항상 '/ 4'로 찍혔음)
+          results.push({ date: dateStr, period: period, idx: idx, total: visits.length, visit: v, matched: matched });
         }
       });
     }
@@ -2591,7 +2948,7 @@ function renderSearchResults(query, results, scopeLabel){
       '<div class="card-head">'
       + '<div class="stub-num">' + (r.idx+1) + '</div>'
       + '<div class="result-head-main">'
-      +   '<div class="result-date">' + r.date + ' (' + weekdayKR(r.date) + ') · ' + PERIOD_LABEL[r.period] + ' · 방문 ' + (r.idx+1) + ' / 4</div>'
+      +   '<div class="result-date">' + r.date + ' (' + weekdayKR(r.date) + ') · ' + PERIOD_LABEL[r.period] + ' · 방문 ' + (r.idx+1) + ' / ' + (r.total || currentVisits.length) + '</div>'
       +   '<div class="result-visitor">' + highlight(v.visitor || '(담당자 없음)', query) + '</div>'
       + '</div>'
       + '</div>'
@@ -2622,14 +2979,12 @@ function showSearchView(show){
     $('dayView').classList.add('hide');
     $('historyView').classList.remove('show');
     searchView.classList.add('show');
-    $('actionbar').style.display = 'none';
-    $('searchClear').style.display = '';
+    $('actionbar').classList.add('hide');
     $('tabDay').classList.remove('active');
     $('tabHistory').classList.remove('active');
   } else {
     searchView.classList.remove('show');
-    $('searchClear').style.display = 'none';
-    $('actionbar').style.display = 'flex';
+    $('actionbar').classList.remove('hide');
     $('historyView').classList.remove('show');
     $('dayView').classList.remove('hide');
     $('tabHistory').classList.remove('active');
@@ -2637,13 +2992,24 @@ function showSearchView(show){
   }
 }
 
+// v24: 검색줄은 평소엔 접혀 있고 돋보기 버튼으로 펼친다.
+function openSearchBar(){
+  $('searchBar').classList.add('show');
+  $('searchToggle').classList.add('active');
+  $('searchInput').focus();
+}
 function clearSearch(){
   $('searchInput').value = '';
+  $('searchBar').classList.remove('show');
+  $('searchToggle').classList.remove('active');
   showSearchView(false);
 }
 
+$('searchToggle').addEventListener('click', ()=>{
+  if($('searchBar').classList.contains('show')) clearSearch();
+  else openSearchBar();
+});
 $('searchBtn').addEventListener('click', doSearch);
-$('searchClear').addEventListener('click', clearSearch);
 $('searchInput').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter'){ e.preventDefault(); doSearch(); }
 });
@@ -2707,17 +3073,18 @@ function switchTab(tab){
   const tabDay = $('tabDay');
   const tabHist = $('tabHistory');
   const actionbar = $('actionbar');
-  // 탭 전환 시 검색 결과는 닫는다
+  // 탭 전환 시 검색 결과와 검색줄은 닫는다
   $('searchView').classList.remove('show');
-  $('searchClear').style.display = 'none';
+  $('searchBar').classList.remove('show');
+  $('searchToggle').classList.remove('active');
   if(tab==='day'){
     dayView.classList.remove('hide'); histView.classList.remove('show');
     tabDay.classList.add('active'); tabHist.classList.remove('active');
-    actionbar.style.display = 'flex';
+    actionbar.classList.remove('hide');
   } else {
     dayView.classList.add('hide'); histView.classList.add('show');
     tabHist.classList.add('active'); tabDay.classList.remove('active');
-    actionbar.style.display = 'none';
+    actionbar.classList.add('hide');
     renderHistory();
   }
 }
@@ -2746,8 +3113,27 @@ document.querySelectorAll('.period-btn').forEach(btn=>{
 $('tabDay').addEventListener('click', async ()=>{ await flushSave(); switchTab('day'); });
 $('tabHistory').addEventListener('click', async ()=>{ await flushSave(); switchTab('history'); });
 $('shareBtn').addEventListener('click', doShare);
-$('exportXlsxBtn').addEventListener('click', exportAddressXlsx);
 $('copyBtn').addEventListener('click', doCopy);
+
+// v24: 하단 바에 흩어져 있던 파일 관련 버튼 3개를 [파일] 메뉴 하나로 모음
+$('fileMenuBtn').addEventListener('click', ()=>{
+  openSheet('파일', [
+    { title:'불러오기', desc:'저장해 둔 .html · .txt · .json 파일에서 기록을 복원합니다',
+      run: ()=>$('importFile').click() },
+    { title:'주소 가져오기 (엑셀)', desc:'엑셀(.xlsx)의 주소·메모를 카드에 앞에서부터 채웁니다',
+      run: ()=>$('importXlsxFile').click() },
+    { title:'주소 내보내기 (엑셀)', desc:'지금 화면에 입력된 방문주소를 엑셀(.xlsx)로 저장합니다',
+      run: ()=>exportAddressXlsx() },
+  ]);
+});
+
+// v24: 자동 임시저장·내비 앱 설정은 [설정]을 눌렀을 때만 펼친다
+$('settingsToggle').addEventListener('click', ()=>{
+  const panel = $('settingsPanel');
+  const opened = panel.classList.toggle('hide') === false;
+  $('settingsToggle').classList.toggle('active', opened);
+  $('settingsToggle').setAttribute('aria-expanded', opened ? 'true' : 'false');
+});
 
 loadSettings().then(()=>{
   loadDate(currentDate);
