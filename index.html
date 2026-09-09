@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>방문일지</title>
-<meta name="theme-color" content="#1B4A40">
+<meta name="theme-color" content="#232C4F">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -12,8 +12,27 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v24
+  방문일지 (Visit Log) v25
   =========================
+  v24 → v25 개선 사항:
+  1. (기능) 폐업법인 방문(주소 중심) 구성 → 방문예정자 중심 구성으로 전면 개편:
+     - 카드 항목을 [방문담당자명 → 방문주소 → 상호 → 변경상호 → 특이사항]에서
+       [방문담당자명 → 방문주소 → 휴대폰번호 → 생년월일 → 특이사항]으로 변경.
+     - 생년월일 입력 시 만 나이가 옆에 자동으로 계산되어 표시됨(입력 즉시 갱신,
+       저장되는 값이 아니라 매번 오늘 날짜 기준으로 새로 계산).
+     - 휴대폰번호는 숫자를 입력하면 010-1234-5678 형식으로 자동 정리됨.
+     - 빠른 검색 범위, 복사(텍스트)/저장(HTML) 리포트, 검색 결과 카드도
+       모두 새 항목 구성(휴대폰번호/생년월일/나이)으로 함께 갱신.
+     - 예전 데이터(상호/변경상호 저장 형식)와는 항목 구성이 달라 자동
+       변환되지 않음 — 폐업법인 방문이 끝난 시점 이후의 새 기록부터 사용.
+  2. (기능) 내비게이션 앱을 네이버맵 하나로 고정, T맵 지원 제거:
+     - 설정 패널의 T맵/네이버맵 선택 토글을 삭제(항상 네이버맵으로 열림).
+     - T맵 URL Scheme·스토어 링크·관련 저장값(localStorage 선택값)을
+       모두 제거해 코드를 단순화.
+  3. (디자인) 새 버전 구분을 위해 전체 색상 테마를 초록/적갈색 계열에서
+     남색(인디고)/황갈색(앰버) 계열로 변경. 배경·카드·테두리·그림자
+     톤도 함께 손질해 예전 버전과 한눈에 구분되도록 함.
+
   v23 → v24 개선 사항:
   1. (기능) 카드 삭제 추가:
      - 각 카드 오른쪽 위 휴지통 버튼으로 그 카드 하나만 지울 수 있음.
@@ -237,33 +256,33 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   /* ===================================================================
-     디자인 토큰 (v24)
-     v23까지는 모서리 반경(0/3/6/8px), 테두리 굵기(1.3/1.5/2px),
-     그림자(딱딱한 3px 3px 0 + 부드러운 그림자)가 요소마다 제각각이라
-     화면이 어수선해 보였음 → 아래 토큰으로 전부 통일한다.
+     디자인 토큰 (v25)
+     v24까지 쓰던 초록/적갈색(teal/brick) 계열을 v25에서 남색(인디고)/
+     황갈색(앰버) 계열로 교체. 변수 이름은 코드 영향 최소화를 위해
+     --teal*, --brick* 그대로 유지하고 값만 바꿨다.
      =================================================================== */
   :root{
     /* 표면 */
-    --paper:#EEF1EB;
-    --paper-2:#E4E9E2;
-    --card:#FBFCFA;
+    --paper:#EEF1F7;
+    --paper-2:#E1E6F1;
+    --card:#FBFCFE;
     --field:#FFFFFF;
 
     /* 글자 */
-    --ink:#1F2A26;
-    --ink-soft:#63706A;
-    --ink-faint:#98A49E;
+    --ink:#1E2438;
+    --ink-soft:#5A6478;
+    --ink-faint:#98A0B8;
 
-    /* 강조 */
-    --teal:#2F6F62;
-    --teal-dark:#1B4A40;
-    --teal-pale:#E0EBE5;
-    --brick:#A63D40;
-    --brick-pale:#F7E9E8;
+    /* 강조 (구 teal 자리 → 인디고, 구 brick 자리 → 앰버) */
+    --teal:#3E4F8A;
+    --teal-dark:#232C4F;
+    --teal-pale:#E1E5F5;
+    --brick:#B5692A;
+    --brick-pale:#F6E7D6;
 
     /* 선 */
-    --line:#DBE1D9;
-    --line-strong:#BCC6BB;
+    --line:#D7DCE9;
+    --line-strong:#B6C0D6;
 
     /* 모서리 — 3단계로 고정 */
     --r-sm:7px;
@@ -272,9 +291,9 @@
     --r-pill:999px;
 
     /* 그림자 — 3단계로 고정 */
-    --sh-1:0 1px 2px rgba(27,58,48,.05);
-    --sh-2:0 2px 8px -3px rgba(27,58,48,.16), 0 1px 2px rgba(27,58,48,.05);
-    --sh-3:0 14px 34px -12px rgba(27,58,48,.34), 0 3px 8px rgba(27,58,48,.10);
+    --sh-1:0 1px 2px rgba(30,36,56,.06);
+    --sh-2:0 2px 8px -3px rgba(30,36,56,.18), 0 1px 2px rgba(30,36,56,.06);
+    --sh-3:0 14px 34px -12px rgba(30,36,56,.36), 0 3px 8px rgba(30,36,56,.12);
   }
 
   *{box-sizing:border-box;}
@@ -327,7 +346,7 @@
   .progress-chip{
     font-family:'IBM Plex Mono',monospace;
     font-size:11.5px; font-weight:600; color:var(--teal-dark);
-    border:1px solid rgba(27,74,64,.28); background:var(--teal-pale);
+    border:1px solid rgba(35,44,79,.28); background:var(--teal-pale);
     padding:4px 9px; white-space:nowrap; border-radius:var(--r-pill);
   }
 
@@ -398,7 +417,7 @@
     flex:1; min-width:0; border:1px solid var(--line-strong); border-radius:var(--r-sm);
     background:var(--field); padding:9px 11px; font-size:14px; color:var(--ink);
   }
-  .search-bar input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(47,111,98,.12); }
+  .search-bar input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(62,79,138,.12); }
   .search-bar select{
     flex-shrink:0; border:1px solid var(--line-strong); border-radius:var(--r-sm);
     background:var(--field); padding:9px 4px; font-size:12.5px; color:var(--ink-soft);
@@ -430,7 +449,7 @@
   }
   .result-match{
     font-family:'IBM Plex Mono',monospace; font-size:10.5px;
-    color:var(--teal-dark); border:1px solid rgba(27,74,64,.3); border-radius:var(--r-pill);
+    color:var(--teal-dark); border:1px solid rgba(35,44,79,.3); border-radius:var(--r-pill);
     background:var(--teal-pale); padding:2px 8px; white-space:nowrap;
   }
   .result-body{ padding:12px 14px; display:flex; flex-direction:column; gap:7px; }
@@ -475,17 +494,6 @@
   .switch-label input[type=checkbox]{
     width:17px; height:17px; accent-color:var(--teal-dark); cursor:pointer; flex-shrink:0; margin:0;
   }
-  .nav-pref-toggle{
-    display:flex; flex-shrink:0;
-    border:1px solid var(--line-strong); border-radius:var(--r-sm); overflow:hidden;
-  }
-  .nav-pref-btn{
-    font-size:12.5px; font-weight:600; border:none;
-    background:var(--field); color:var(--ink-soft); padding:7px 12px; cursor:pointer;
-  }
-  .nav-pref-btn + .nav-pref-btn{ border-left:1px solid var(--line-strong); }
-  .nav-pref-btn.active{ background:var(--teal-dark); color:#fff; }
-
   /* 섹션 머리 */
   .section-head{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -538,7 +546,7 @@
     border:1px solid var(--line-strong); border-radius:var(--r-sm);
     background:var(--field); color:var(--ink);
   }
-  .order-input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(47,111,98,.12); }
+  .order-input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(62,79,138,.12); }
   .order-input.filled{ border-color:var(--teal-dark); color:var(--teal-dark); background:var(--teal-pale); }
 
   .time-area{ margin-left:auto; display:flex; align-items:center; gap:5px; min-width:0; }
@@ -594,20 +602,31 @@
   }
   .field textarea{ min-height:56px; line-height:1.5; }
   .field input:focus, .field textarea:focus{
-    outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(47,111,98,.12);
+    outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(62,79,138,.12);
   }
   .field.flag input, .field.flag textarea{ border-color:#E0D0B4; background:#FDFAF3; }
   .field.flag input:focus, .field.flag textarea:focus{ border-color:#C9A96A; box-shadow:0 0 0 3px rgba(201,169,106,.16); }
   .addr-row{ display:flex; gap:6px; }
   .addr-row input{ flex:1; min-width:0; }
-  .tmap-btn{
+  .nav-btn{
     flex-shrink:0; display:flex; align-items:center; gap:4px; white-space:nowrap;
     font-size:12.5px; font-weight:700; padding:0 12px; cursor:pointer;
     border:1px solid var(--teal-dark); border-radius:var(--r-sm);
     background:var(--teal-pale); color:var(--teal-dark);
   }
-  .tmap-btn:active{ background:var(--teal-dark); color:#fff; }
-  .tmap-btn.loading{ opacity:.55; pointer-events:none; }
+  .nav-btn:active{ background:var(--teal-dark); color:#fff; }
+  .nav-btn.loading{ opacity:.55; pointer-events:none; }
+
+  /* 생년월일 + 자동 계산된 나이 표시 */
+  .birth-row{ display:flex; gap:6px; }
+  .birth-row input{ flex:1; min-width:0; }
+  .age-badge{
+    flex-shrink:0; display:flex; align-items:center; white-space:nowrap;
+    font-size:12.5px; font-weight:700; padding:0 12px;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--paper-2); color:var(--ink-soft);
+  }
+  .age-badge.filled{ border-color:var(--teal-dark); background:var(--teal-pale); color:var(--teal-dark); }
 
   /* 구간 경로 — 앞뒤 카드에 주소가 모두 있을 때만 나타난다 (v24) */
   .segment-connector{
@@ -617,7 +636,7 @@
   .segment-btn{
     font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600;
     padding:6px 14px; border-radius:var(--r-pill); cursor:pointer;
-    border:1px solid rgba(27,74,64,.28); background:var(--teal-pale); color:var(--teal-dark);
+    border:1px solid rgba(35,44,79,.28); background:var(--teal-pale); color:var(--teal-dark);
     display:flex; align-items:center; gap:6px;
   }
   .segment-btn:active{ background:var(--teal-dark); color:#fff; }
@@ -652,7 +671,7 @@
     border:1px solid var(--line-strong); border-radius:var(--r-sm); background:var(--field);
     padding:12px; font-size:14.5px; line-height:1.65; color:var(--ink);
   }
-  .memo-textarea:focus{ outline:none; border-color:var(--brick); box-shadow:0 0 0 3px rgba(166,61,64,.12); }
+  .memo-textarea:focus{ outline:none; border-color:var(--brick); box-shadow:0 0 0 3px rgba(181,105,42,.12); }
 
   /* ------------------------------ 지난 기록 ----------------------------- */
   .history{ display:none; }
@@ -668,7 +687,7 @@
   .hist-meta{ font-size:12px; color:var(--ink-faint); margin-top:2px; }
   .hist-count{
     font-family:'IBM Plex Mono',monospace; font-size:11px; flex-shrink:0;
-    border:1px solid rgba(27,74,64,.28); background:var(--teal-pale);
+    border:1px solid rgba(35,44,79,.28); background:var(--teal-pale);
     color:var(--teal-dark); border-radius:var(--r-pill); padding:3px 9px;
   }
   .empty{ text-align:center; padding:44px 20px; color:var(--ink-faint); font-size:13.5px; }
@@ -677,7 +696,7 @@
   /* -------------------------------- 모달 ------------------------------- */
   .modal-overlay{
     position:fixed; inset:0; z-index:50;
-    background:rgba(24,36,31,.5);
+    background:rgba(20,24,38,.5);
     display:flex; align-items:center; justify-content:center;
     padding:22px;
     animation:modal-fade .14s ease;
@@ -776,7 +795,7 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v24</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
@@ -808,11 +827,11 @@
       <option value="all">전체</option>
       <option value="visitor">담당자명</option>
       <option value="addr">주소</option>
-      <option value="name">상호</option>
-      <option value="changed">변경상호</option>
+      <option value="phone">휴대폰번호</option>
+      <option value="birth">생년월일</option>
       <option value="note">특이사항</option>
     </select>
-    <input type="text" id="searchInput" placeholder="주소·상호·담당자 검색"
+    <input type="text" id="searchInput" placeholder="주소·휴대폰번호·담당자 검색"
            enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false">
     <button id="searchBtn" type="button">검색</button>
   </div>
@@ -836,13 +855,6 @@
         <span class="setting-text">5분마다 자동 임시저장<small>기기 안에만 조용히 저장돼요</small></span>
         <span class="setting-val" id="lastBackup">—</span>
       </label>
-      <div class="setting-item">
-        <span class="setting-text">내비게이션 앱<small>카드의 길찾기 버튼에 쓰여요</small></span>
-        <div class="nav-pref-toggle" id="navPrefToggle">
-          <button type="button" class="nav-pref-btn" data-nav="tmap">T맵</button>
-          <button type="button" class="nav-pref-btn" data-nav="naver">네이버맵</button>
-        </div>
-      </div>
     </div>
 
     <div id="visitsPanel">
@@ -920,24 +932,52 @@ const storage = (() => {
   };
 })();
 
-const LIMITS = { addr:80, name:20, changed:20, note:100, visitor:20 };
+const LIMITS = { addr:80, phone:13, birth:10, note:100, visitor:20 };
 // v24: 방문주소는 항상 '충청북도 제천시'로 시작하므로, 카드가 새로 만들어질 때
 // 이 접두사를 자동으로 입력칸에 채워두고 사용자는 나머지만 입력하면 되게 한다.
 const ADDR_PREFIX = '충청북도 제천시 ';
 function addrFilled(addr){
   return !!(addr && addr.trim() && addr.trim() !== ADDR_PREFIX.trim());
 }
+// v25: 방문상호/변경상호 → 방문예정자 휴대폰번호/생년월일(자동 나이계산)로 개편
 const FIELD_META = [
-  {key:'visitor', label:'방문담당자명', type:'input',    max:LIMITS.visitor},
-  {key:'addr',    label:'방문주소',     type:'input',    max:LIMITS.addr},
-  {key:'name',    label:'방문상호',     type:'input',    max:LIMITS.name},
-  {key:'changed', label:'변경 상호',    type:'input',    max:LIMITS.changed},
-  {key:'note',    label:'특이사항',     type:'textarea', max:LIMITS.note},
+  {key:'visitor', label:'방문담당자명',   type:'input',    max:LIMITS.visitor},
+  {key:'addr',    label:'방문주소',       type:'input',    max:LIMITS.addr},
+  {key:'phone',   label:'휴대폰번호',     type:'input',    max:LIMITS.phone, inputType:'tel'},
+  {key:'birth',   label:'생년월일',       type:'input',    max:LIMITS.birth, inputType:'date'},
+  {key:'note',    label:'특이사항',       type:'textarea', max:LIMITS.note},
 ];
 const FIELD_LABEL = {
-  addr:'방문주소', name:'방문상호', changed:'변경 상호',
+  addr:'방문주소', phone:'휴대폰번호', birth:'생년월일',
   note:'특이사항', visitor:'방문담당자명', time:'방문시각',
 };
+// 생년월일(YYYY-MM-DD) → 만 나이. 형식이 안 맞거나 미래 날짜면 빈 문자열.
+function calcAge(birthStr){
+  if(!birthStr) return '';
+  const m = String(birthStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return '';
+  const y = parseInt(m[1],10), mo = parseInt(m[2],10), d = parseInt(m[3],10);
+  const birth = new Date(y, mo-1, d);
+  if(birth.getFullYear() !== y || birth.getMonth() !== mo-1 || birth.getDate() !== d) return '';
+  const today = new Date();
+  if(birth > today) return '';
+  let age = today.getFullYear() - y;
+  const beforeBirthday = (today.getMonth() < mo-1) || (today.getMonth() === mo-1 && today.getDate() < d);
+  if(beforeBirthday) age--;
+  return age >= 0 ? age : '';
+}
+function ageLabel(birthStr){
+  const age = calcAge(birthStr);
+  return age === '' ? '나이 -' : '만 '+age+'세';
+}
+// 숫자만 남겨 010-1234-5678 형식으로 정리 (완성되기 전 자리수는 그대로 둠)
+function formatPhone(v){
+  const digits = String(v||'').replace(/[^0-9]/g,'').slice(0,11);
+  if(digits.length < 4) return digits;
+  if(digits.length < 8) return digits.slice(0,3)+'-'+digits.slice(3);
+  if(digits.length <= 10) return digits.slice(0,3)+'-'+digits.slice(3,6)+'-'+digits.slice(6);
+  return digits.slice(0,3)+'-'+digits.slice(3,7)+'-'+digits.slice(7);
+}
 const SETTINGS_KEY = 'visit-log:settings';
 const DEFAULT_VISIT_COUNT = 4;
 const MAX_VISIT_COUNT = 20;
@@ -987,7 +1027,7 @@ function nowHHMMSS(){
 }
 function emptyVisits(n){
   const count = n || DEFAULT_VISIT_COUNT;
-  return Array.from({length: count}, () => ({addr:ADDR_PREFIX,name:'',changed:'',note:'',time:'',visitor:'',order:''}));
+  return Array.from({length: count}, () => ({addr:ADDR_PREFIX,phone:'',birth:'',note:'',time:'',visitor:'',order:''}));
 }
 const _weekdayCache = {};
 function weekdayKR(dateStr){
@@ -1003,7 +1043,7 @@ function keyFor(dateStr, period){ return 'visit-log:'+dateStr+':'+(period||curre
 function legacyKeyFor(dateStr){ return 'visit-log:'+dateStr; } // v19 이전 형식(오전/오후 구분 없음)
 
 function hasAnyData(visits){
-  return visits.some(v => addrFilled(v.addr) || v.name || v.changed || v.note || v.time || v.visitor);
+  return visits.some(v => addrFilled(v.addr) || v.phone || v.birth || v.note || v.time || v.visitor);
 }
 
 // 손상된 저장 데이터를 안전하게 보정 (앱이 죽지 않도록)
@@ -1264,7 +1304,7 @@ $('memoText') && $('memoText').addEventListener('input', (e)=>{
 });
 
 function countFilled(visits){
-  return visits.filter(v => addrFilled(v.addr) || v.name || v.changed || v.note || v.time || v.visitor).length;
+  return visits.filter(v => addrFilled(v.addr) || v.phone || v.birth || v.note || v.time || v.visitor).length;
 }
 
 function updateProgress(){
@@ -1341,10 +1381,10 @@ async function deleteVisitCard(idx){
     showToast('카드는 최소 1개는 있어야 합니다');
     return;
   }
-  const hasContent = addrFilled(visit.addr) || visit.name || visit.changed
+  const hasContent = addrFilled(visit.addr) || visit.phone || visit.birth
     || visit.note || visit.time || visit.visitor;
   if(hasContent){
-    const label = (visit.name || visit.visitor || visit.addr || '').trim();
+    const label = (visit.visitor || visit.addr || visit.phone || '').trim();
     const ok = await appConfirm({
       title: '방문 ' + (idx+1) + ' 카드를 삭제할까요?',
       html: (label ? '<div class="modal-quote">' + escapeHtml(label.slice(0, 60)) + '</div>' : '')
@@ -1475,10 +1515,17 @@ function renderCards(){
         field.innerHTML = labelHtml
           + '<div class="addr-row">'
           +   '<input '+common+' type="text" enterkeyhint="next">'
-          +   '<button type="button" class="tmap-btn" data-nav-btn title="선택한 내비 앱으로 길찾기">'+navAppLabel()+' 길찾기</button>'
+          +   '<button type="button" class="nav-btn" data-nav-btn title="네이버맵으로 길찾기">네이버맵 길찾기</button>'
+          + '</div>';
+      } else if(meta.key === 'birth'){
+        field.innerHTML = labelHtml
+          + '<div class="birth-row">'
+          +   '<input '+common+' type="date" enterkeyhint="next">'
+          +   '<span class="age-badge' + (calcAge(val) !== '' ? ' filled' : '') + '" data-age-badge>' + escapeHtml(ageLabel(val)) + '</span>'
           + '</div>';
       } else {
-        field.innerHTML = labelHtml + '<input '+common+' type="text" enterkeyhint="next">';
+        const inputType = meta.inputType === 'tel' ? 'tel' : 'text';
+        field.innerHTML = labelHtml + '<input '+common+' type="'+inputType+'" enterkeyhint="next">';
       }
       if(meta.key === 'addr'){
         const navBtn = field.querySelector('[data-nav-btn]');
@@ -1500,12 +1547,27 @@ function renderCards(){
       inputEl.addEventListener('focus', ()=>field.classList.add('focused'));
       inputEl.addEventListener('blur', ()=>field.classList.remove('focused'));
       inputEl.addEventListener('input', (e)=>{
-        currentVisits[idx][meta.key] = e.target.value;
-        syncCnt(e.target.value);
+        let v = e.target.value;
+        // 휴대폰번호는 입력하는 동안 010-1234-5678 형식으로 자동 정리
+        if(meta.key === 'phone'){
+          v = formatPhone(v);
+          e.target.value = v;
+        }
+        currentVisits[idx][meta.key] = v;
+        syncCnt(v);
+        // 생년월일을 입력/수정할 때마다 옆의 나이 배지를 즉시 갱신
+        if(meta.key === 'birth'){
+          const badge = field.querySelector('[data-age-badge]');
+          if(badge){
+            const filled = calcAge(v) !== '';
+            badge.textContent = ageLabel(v);
+            badge.classList.toggle('filled', filled);
+          }
+        }
         // 이 방문칸에 뭔가 입력할 때마다 최신 수정 시각으로 갱신
-        // (예: 10시에 상호를 적었다가, 나중에 방문지에서 변경상호를
+        // (예: 10시에 휴대폰번호를 적었다가, 나중에 방문지에서 생년월일을
         //  고쳐 입력하면 그 수정한 시각으로 다시 기록됨)
-        if(e.target.value.trim()){
+        if(v.trim()){
           stampTime();
         }
         if(meta.key === 'addr') refreshConnectors();
@@ -1537,46 +1599,12 @@ function renderCards(){
   refreshSortHint();
 }
 
-// ---------------- 내비 앱 연동 (T맵 / 네이버맵 선택) ----------------
-// 방문주소 → 좌표 변환(지오코딩) 후 사용자가 선택한 내비 앱을 목적지 경로안내 화면으로 바로 실행.
-// 좌표를 못 찾으면 해당 앱의 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
-const TMAP_STORE_IOS = 'https://apps.apple.com/kr/app/id431589174';
-const TMAP_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
+// ---------------- 내비 앱 연동 (네이버맵 전용, v25에서 T맵 지원 제거) ----------------
+// 방문주소 → 좌표 변환(지오코딩) 후 네이버맵을 목적지 경로안내 화면으로 바로 실행.
+// 좌표를 못 찾으면 네이버맵의 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
 const NAVER_STORE_IOS = 'https://apps.apple.com/kr/app/id311867728';
 const NAVER_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.nhn.android.nmap';
 const NAVER_APPNAME = 'com.atlaslab.visitlog'; // 네이버맵 URL Scheme 필수 식별자(임의 문자열 가능)
-const NAV_APP_KEY = 'visitlog_navApp';
-
-// v24: 여기만 저장소 어댑터를 안 거치고 localStorage 를 직접 쓰고 있었음.
-// 저장소가 막힌 브라우저(시크릿 모드·쿠키 차단·샌드박스 프레임)에서는
-// localStorage 접근 자체가 예외를 던지는데, 이 함수가 스크립트 최상단에서
-// updateNavPrefUI() 로 호출되는 탓에 앱 전체가 멈춰버렸다 → try/catch 로 방어.
-let navAppFallback = 'tmap';
-function getNavApp(){
-  try{
-    const v = localStorage.getItem(NAV_APP_KEY);
-    return v === 'naver' ? 'naver' : 'tmap';
-  }catch(e){
-    return navAppFallback; // 저장은 안 되지만 이번 세션 동안은 선택이 유지됨
-  }
-}
-function setNavApp(app){
-  navAppFallback = app === 'naver' ? 'naver' : 'tmap';
-  try{
-    localStorage.setItem(NAV_APP_KEY, navAppFallback);
-  }catch(e){ /* 저장 실패해도 화면 갱신은 그대로 진행 */ }
-  updateNavPrefUI();
-  renderCards(); // 카드의 길찾기 버튼 라벨을 새 선택값으로 갱신
-}
-function updateNavPrefUI(){
-  const cur = getNavApp();
-  document.querySelectorAll('.nav-pref-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.nav === cur);
-  });
-}
-function navAppLabel(){
-  return getNavApp() === 'naver' ? '네이버맵' : 'T맵';
-}
 
 async function geocodeAddressKR(addr){
   const q = encodeURIComponent(addr + ', 대한민국');
@@ -1613,50 +1641,31 @@ async function openInNavApp(address, btnEl){
   }
   // '(' 앞부분만 내비 앱으로 전달 (예: "의림대로 41(영천동)" → "의림대로 41")
   const addr = raw.split('(')[0].trim() || raw;
-  const app = getNavApp();
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = app === 'naver' ? (isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS) : (isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS);
+  const storeUrl = isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
   const enc = encodeURIComponent(addr);
   if(btnEl) btnEl.classList.add('loading');
   try{
     const geo = await geocodeAddressKR(addr);
     if(geo){
-      let navUrl;
-      if(app === 'naver'){
-        navUrl = 'nmap://navigation?dlat='+geo.lat+'&dlng='+geo.lon+'&dname='+enc+'&appname='+NAVER_APPNAME;
-      }else{
-        navUrl = 'tmap://route?rGoName='+enc+'&rGoX='+geo.lon+'&rGoY='+geo.lat
-          + '&goalname='+enc+'&goalx='+geo.lon+'&goaly='+geo.lat;
-      }
+      const navUrl = 'nmap://navigation?dlat='+geo.lat+'&dlng='+geo.lon+'&dname='+enc+'&appname='+NAVER_APPNAME;
       launchAppUrl(navUrl, storeUrl);
     } else {
-      showToast('정확한 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
-      const searchUrl = app === 'naver'
-        ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
-        : 'tmap://search?name='+enc;
+      showToast('정확한 좌표를 못 찾아 네이버맵 검색으로 엽니다');
+      const searchUrl = 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME;
       launchAppUrl(searchUrl, storeUrl);
     }
   }catch(err){
-    showToast('주소 조회 실패 — '+navAppLabel()+' 검색으로 엽니다');
-    const searchUrl = app === 'naver'
-      ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME
-      : 'tmap://search?name='+enc;
+    showToast('주소 조회 실패 — 네이버맵 검색으로 엽니다');
+    const searchUrl = 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME;
     launchAppUrl(searchUrl, storeUrl);
   }finally{
     if(btnEl) btnEl.classList.remove('loading');
   }
 }
 
-document.querySelectorAll('.nav-pref-btn').forEach(btn => {
-  btn.addEventListener('click', () => setNavApp(btn.dataset.nav));
-});
-updateNavPrefUI();
-
 // ---------------- 구간 경로 (N번 방문지 → N+1번 방문지) ----------------
 // 네이버맵: 출발지·도착지 좌표를 모두 지정한 정식 경로(nmap://route/car)를 엽니다.
-// 티맵: 앱의 URL scheme이 출발지 좌표 지정을 공식 지원하지 않아, 도착지만 지정됩니다
-//       (앱을 열면 현재 위치가 출발지로 자동 사용돼요 — 실제로 그 자리에서 다음 방문지로
-//        출발할 때 누르면 결과적으로 똑같이 동작합니다).
 async function openSegmentRoute(fromIdx, toIdx, btnEl){
   const fromRaw = (currentVisits[fromIdx].addr || '').trim();
   const toRaw = (currentVisits[toIdx].addr || '').trim();
@@ -1666,41 +1675,32 @@ async function openSegmentRoute(fromIdx, toIdx, btnEl){
   }
   const fromAddr = fromRaw.split('(')[0].trim() || fromRaw;
   const toAddr = toRaw.split('(')[0].trim() || toRaw;
-  const app = getNavApp();
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = app === 'naver' ? (isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS) : (isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS);
+  const storeUrl = isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
 
   if(btnEl) btnEl.classList.add('loading');
   try{
     const [fromGeo, toGeo] = await Promise.all([geocodeAddressKR(fromAddr), geocodeAddressKR(toAddr)]);
 
     if(!toGeo){
-      showToast((toIdx+1)+'번 방문지 좌표를 못 찾아 '+navAppLabel()+' 검색으로 엽니다');
+      showToast((toIdx+1)+'번 방문지 좌표를 못 찾아 네이버맵 검색으로 엽니다');
       const enc = encodeURIComponent(toAddr);
-      const searchUrl = app === 'naver' ? 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME : 'tmap://search?name='+enc;
+      const searchUrl = 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME;
       launchAppUrl(searchUrl, storeUrl);
       return;
     }
 
-    if(app === 'naver'){
-      const dEnc = encodeURIComponent(toAddr);
-      let navUrl;
-      if(fromGeo){
-        const sEnc = encodeURIComponent(fromAddr);
-        navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
-          + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-      }else{
-        navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-        showToast((fromIdx+1)+'번 출발지 좌표를 못 찾아 도착지만 안내합니다');
-      }
-      launchAppUrl(navUrl, storeUrl);
+    const dEnc = encodeURIComponent(toAddr);
+    let navUrl;
+    if(fromGeo){
+      const sEnc = encodeURIComponent(fromAddr);
+      navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
+        + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
     }else{
-      const dEnc = encodeURIComponent(toAddr);
-      const navUrl = 'tmap://route?rGoName='+dEnc+'&rGoX='+toGeo.lon+'&rGoY='+toGeo.lat
-        + '&goalname='+dEnc+'&goalx='+toGeo.lon+'&goaly='+toGeo.lat;
-      showToast('티맵은 도착지('+(toIdx+1)+'번)까지만 안내돼요 · 현재 위치가 출발지로 쓰여요');
-      launchAppUrl(navUrl, storeUrl);
+      navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+      showToast((fromIdx+1)+'번 출발지 좌표를 못 찾아 도착지만 안내합니다');
     }
+    launchAppUrl(navUrl, storeUrl);
   }catch(err){
     showToast('주소 조회 중 오류가 발생했어요');
   }finally{
@@ -1787,14 +1787,15 @@ function buildReportText(dateStr, visits, period, memo){
   lines.push('='.repeat(28));
   let count = 0;
   visits.forEach((v, i)=>{
-    if(!(addrFilled(v.addr)||v.name||v.changed||v.note||v.time||v.visitor)) return;
+    if(!(addrFilled(v.addr)||v.phone||v.birth||v.note||v.time||v.visitor)) return;
     count++;
     lines.push('');
     lines.push('[방문 '+(i+1)+']');
     lines.push('방문시각: '+(v.time || '-'));
     lines.push('주소: '+(v.addr||'-'));
-    lines.push('상호: '+(v.name||'-'));
-    if(v.changed) lines.push('변경상호: '+v.changed);
+    lines.push('휴대폰번호: '+(v.phone||'-'));
+    lines.push('생년월일: '+(v.birth||'-'));
+    lines.push('나이: '+(v.birth ? ageLabel(v.birth) : '-'));
     lines.push('특이사항: '+(v.note||'-'));
     lines.push('방문담당자명: '+(v.visitor||'-'));
   });
@@ -1815,15 +1816,16 @@ function buildReportHtml(dateStr, visits, period, memo){
   let count = 0;
   const cards = [];
   visits.forEach((v, i)=>{
-    if(!(addrFilled(v.addr)||v.name||v.changed||v.note||v.time||v.visitor)) return;
+    if(!(addrFilled(v.addr)||v.phone||v.birth||v.note||v.time||v.visitor)) return;
     count++;
     cards.push(
       '<section class="card"><div class="ch">방문 '+(i+1)+'</div><div class="cb">'
       + row('방문담당자명', v.visitor)
       + row('방문시각', v.time)
       + row('주소', v.addr)
-      + row('상호', v.name)
-      + (v.changed ? row('변경상호', v.changed) : '')
+      + row('휴대폰번호', v.phone)
+      + row('생년월일', v.birth)
+      + (v.birth ? row('나이', ageLabel(v.birth)) : '')
       + row('특이사항', v.note)
       + '</div></section>');
   });
@@ -1840,23 +1842,23 @@ function buildReportHtml(dateStr, visits, period, memo){
     + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
     + '<title>방문일지 ' + esc(dateStr) + esc(periodTag) + '</title>\n'
     + '<style>\n'
-    + 'body{margin:0;background:#f5f1e8;color:#22291f;font-family:\'Noto Sans KR\',\'Malgun Gothic\',sans-serif;}\n'
+    + 'body{margin:0;background:#eef1f7;color:#1e2438;font-family:\'Noto Sans KR\',\'Malgun Gothic\',sans-serif;}\n'
     + 'main{max-width:520px;margin:0 auto;padding:20px 16px 40px;}\n'
     + 'header{margin-bottom:16px;}\n'
-    + 'h1{font-family:\'Noto Serif KR\',serif;font-size:24px;margin:0 0 4px;color:#123f38;}\n'
-    + '.meta{font-size:13px;color:#0f6a5f;font-weight:600;}\n'
-    + '.card{background:#fff;border:1.5px solid #22291f;margin-bottom:12px;}\n'
-    + '.ch{background:#0f6a5f;color:#fff;font-weight:700;font-size:14px;padding:8px 12px;}\n'
+    + 'h1{font-family:\'Noto Serif KR\',serif;font-size:24px;margin:0 0 4px;color:#232c4f;}\n'
+    + '.meta{font-size:13px;color:#3e4f8a;font-weight:600;}\n'
+    + '.card{background:#fff;border:1.5px solid #1e2438;margin-bottom:12px;}\n'
+    + '.ch{background:#232c4f;color:#fff;font-weight:700;font-size:14px;padding:8px 12px;}\n'
     + '.cb{padding:6px 12px 10px;}\n'
-    + '.r{display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed #d8d2c2;font-size:14px;}\n'
+    + '.r{display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed #d7dce9;font-size:14px;}\n'
     + '.r:last-child{border-bottom:none;}\n'
-    + '.k{flex:0 0 92px;color:#5b6353;font-weight:600;}\n'
+    + '.k{flex:0 0 92px;color:#5a6478;font-weight:600;}\n'
     + '.v{flex:1;word-break:break-all;white-space:pre-wrap;}\n'
-    + '.empty{color:#5b6353;text-align:center;padding:30px 0;}\n'
-    + '.memo-card{background:#fffdf4;border:1.5px solid #a63d40;margin-bottom:12px;}\n'
-    + '.memo-card .ch{background:#a63d40;}\n'
+    + '.empty{color:#5a6478;text-align:center;padding:30px 0;}\n'
+    + '.memo-card{background:#fdf5ea;border:1.5px solid #b5692a;margin-bottom:12px;}\n'
+    + '.memo-card .ch{background:#b5692a;}\n'
     + '.memo-body{white-space:pre-wrap;word-break:break-all;font-size:14px;line-height:1.6;padding:12px;}\n'
-    + 'footer{margin-top:18px;font-size:11.5px;color:#8a8f80;text-align:center;line-height:1.6;}\n'
+    + 'footer{margin-top:18px;font-size:11.5px;color:#98a0b8;text-align:center;line-height:1.6;}\n'
     + '@media print{body{background:#fff;}.card{border:1px solid #999;break-inside:avoid;}}\n'
     + '</style>\n</head>\n<body>\n<main>\n'
     + '<header><h1>방문일지</h1><div class="meta">' + esc(dateStr) + ' (' + weekdayKR(dateStr) + ')' + esc(periodTag) + ' · 총 ' + count + '건</div></header>\n'
@@ -1908,8 +1910,8 @@ function parseReportText(text){
     visits[num-1] = {
       time: get('방문시각').slice(0, 40),
       addr: get('주소').slice(0, LIMITS.addr),
-      name: get('상호').slice(0, LIMITS.name),
-      changed: get('변경상호').slice(0, LIMITS.changed),
+      phone: get('휴대폰번호').slice(0, LIMITS.phone),
+      birth: get('생년월일').slice(0, LIMITS.birth),
       note: get('특이사항').slice(0, LIMITS.note),
       visitor: get('방문담당자명').slice(0, LIMITS.visitor),
     };
@@ -2720,7 +2722,7 @@ async function importAddressXlsx(file){
 
   const willOverwrite = items.some((_, i) => {
     const v = currentVisits[i];
-    return v && (addrFilled(v.addr) || v.name || v.changed || v.note || v.time || v.visitor);
+    return v && (addrFilled(v.addr) || v.phone || v.birth || v.note || v.time || v.visitor);
   });
   if(willOverwrite){
     const ok = await appConfirm({
@@ -2859,7 +2861,7 @@ async function shiftDate(deltaDays){
 }
 
 // ---------------- 빠른 검색 (v9) ----------------
-// 카드 1장을 하나의 그룹으로 보고, 주소/상호/변경상호/특이사항/담당자/시각 중
+// 카드 1장을 하나의 그룹으로 보고, 주소/휴대폰번호/생년월일/특이사항/담당자/시각 중
 // 하나라도 검색 단어를 포함하면 해당 카드 전체를 결과에 나열한다.
 // 모든 날짜의 저장 기록을 대상으로 한다.
 function escapeHtml(s){
@@ -2882,7 +2884,7 @@ async function doSearch(){
   const query = q.toLowerCase();
   const scope = $('searchScope').value; // all 또는 특정 필드 키
   const searchFields = scope === 'all'
-    ? ['visitor','addr','name','changed','note','time']
+    ? ['visitor','addr','phone','birth','note','time']
     : [scope];
   const results = [];
   try{
@@ -2901,7 +2903,7 @@ async function doSearch(){
         visits = normalizeVisits(parsed);
       }catch(e){ continue; } // 깨진 기록은 건너뜀
       visits.forEach((v, idx) => {
-        if(!(addrFilled(v.addr)||v.name||v.changed||v.note||v.time||v.visitor)) return;
+        if(!(addrFilled(v.addr)||v.phone||v.birth||v.note||v.time||v.visitor)) return;
         // 어느 항목이 일치했는지 함께 기록 (결과에 '일치 항목'으로 표시)
         const matched = [];
         searchFields.forEach((k)=>{
@@ -2937,9 +2939,10 @@ function renderSearchResults(query, results, scopeLabel){
       ['방문담당자명', v.visitor || '-'],
       ['방문시각', v.time || '-'],
       ['주소', v.addr || '-'],
-      ['상호', v.name || '-'],
+      ['휴대폰번호', v.phone || '-'],
+      ['생년월일', v.birth || '-'],
     ];
-    if(v.changed) rows.push(['변경상호', v.changed]);
+    if(v.birth) rows.push(['나이', ageLabel(v.birth)]);
     rows.push(['특이사항', v.note || '-']);
 
     const card = document.createElement('div');
