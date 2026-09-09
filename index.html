@@ -12,8 +12,17 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25
+  방문일지 (Visit Log) v25.1
   =========================
+  v25 → v25.1 개선 사항:
+  1. (디자인) 방문주소 입력칸을 한 줄짜리 입력창(가로 스크롤)에서 2줄까지
+     자동 줄바꿈되는 입력칸으로 변경:
+     - 주소가 길어지면 뒷부분이 옆의 "네이버맵 길찾기" 버튼에 가려 안 보이던
+       문제 → 버튼을 주소 아래로 내리고, 주소 칸 자체를 세로로 2줄까지
+       늘어나게 해서 전체 주소가 한눈에 보이도록 함.
+     - 물리 키보드의 Enter 키나 붙여넣기로 실제 줄바꿈이 섞여 들어가지
+       않도록 막아, 저장되는 주소 값 자체는 예전처럼 한 줄 텍스트로 유지.
+
   v24 → v25 개선 사항:
   1. (기능) 폐업법인 방문(주소 중심) 구성 → 방문예정자 중심 구성으로 전면 개편:
      - 카드 항목을 [방문담당자명 → 방문주소 → 상호 → 변경상호 → 특이사항]에서
@@ -606,8 +615,15 @@
   }
   .field.flag input, .field.flag textarea{ border-color:#E0D0B4; background:#FDFAF3; }
   .field.flag input:focus, .field.flag textarea:focus{ border-color:#C9A96A; box-shadow:0 0 0 3px rgba(201,169,106,.16); }
-  .addr-row{ display:flex; gap:6px; }
-  .addr-row input{ flex:1; min-width:0; }
+  /* 방문주소: 주소가 길어도 한 줄로 스크롤되어 뒷부분이 안 보이던 문제를
+     v25.1에서 수정 — 입력칸을 2줄로 자동 줄바꿈되는 textarea로 바꾸고,
+     길찾기 버튼은 주소 아래로 내려서 겹치거나 가리지 않게 함. */
+  .addr-row{ display:flex; flex-direction:column; gap:6px; }
+  .addr-row textarea{
+    width:100%; min-height:52px; max-height:78px; line-height:1.4;
+    resize:none; overflow-y:auto; white-space:pre-wrap; word-break:break-all;
+  }
+  .addr-row .nav-btn{ align-self:flex-end; height:34px; }
   .nav-btn{
     flex-shrink:0; display:flex; align-items:center; gap:4px; white-space:nowrap;
     font-size:12.5px; font-weight:700; padding:0 12px; cursor:pointer;
@@ -795,7 +811,7 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v25</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25.1</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
@@ -1514,7 +1530,7 @@ function renderCards(){
       } else if(meta.key === 'addr'){
         field.innerHTML = labelHtml
           + '<div class="addr-row">'
-          +   '<input '+common+' type="text" enterkeyhint="next">'
+          +   '<textarea '+common+' rows="2" enterkeyhint="next"></textarea>'
           +   '<button type="button" class="nav-btn" data-nav-btn title="네이버맵으로 길찾기">네이버맵 길찾기</button>'
           + '</div>';
       } else if(meta.key === 'birth'){
@@ -1531,6 +1547,12 @@ function renderCards(){
         const navBtn = field.querySelector('[data-nav-btn]');
         navBtn.addEventListener('click', ()=>{
           openInNavApp(currentVisits[idx].addr, navBtn);
+        });
+        // 주소는 여러 줄로 자동 줄바꿈만 되면 충분 — 물리 키보드의 Enter로
+        // 실제 줄바꿈(개행)이 들어가 저장/길찾기에 지장이 없도록 막는다.
+        const addrTa = field.querySelector('[data-field]');
+        addrTa.addEventListener('keydown', (e)=>{
+          if(e.key === 'Enter'){ e.preventDefault(); }
         });
       }
       // 글자수는 평소엔 감춰두고 입력 중이거나 한도의 80%를 넘으면 보여준다
@@ -1552,6 +1574,14 @@ function renderCards(){
         if(meta.key === 'phone'){
           v = formatPhone(v);
           e.target.value = v;
+        }
+        // 주소에 붙여넣기 등으로 줄바꿈이 섞여 들어오면 공백으로 정리
+        // (화면에는 2줄로 자동 줄바꿈되지만, 저장되는 값 자체는 한 줄 텍스트로 유지)
+        if(meta.key === 'addr' && /[\r\n]/.test(v)){
+          const pos = e.target.selectionStart;
+          v = v.replace(/[\r\n]+/g, ' ');
+          e.target.value = v;
+          if(typeof pos === 'number') e.target.setSelectionRange(pos, pos);
         }
         currentVisits[idx][meta.key] = v;
         syncCnt(v);
