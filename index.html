@@ -12,8 +12,17 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25.1
+  방문일지 (Visit Log) v25.2
   =========================
+  v25.1 → v25.2 개선 사항:
+  1. (오류 수정) v25에서 항목을 새로 짤 때 방문예정자명이 빠져 있던 문제
+     수정. 카드 항목을 [방문담당자명 → 방문주소 → 방문예정자명 → 휴대폰번호
+     → 생년월일 → 특이사항] 순으로 구성해 방문예정자명을 추가함.
+     - 빠른 검색 범위, 복사(텍스트)/저장(HTML) 리포트, 검색 결과 카드에도
+       방문예정자명이 함께 표시·검색되도록 반영.
+     - v25.1까지 이미 저장해둔 기록은 방문예정자명이 빈 값으로 남아있으며,
+       카드를 열어 새로 입력하면 됨(기존 항목은 그대로 보존).
+
   v25 → v25.1 개선 사항:
   1. (디자인) 방문주소 입력칸을 한 줄짜리 입력창(가로 스크롤)에서 2줄까지
      자동 줄바꿈되는 입력칸으로 변경:
@@ -811,7 +820,7 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v25.1</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25.2</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
@@ -843,11 +852,12 @@
       <option value="all">전체</option>
       <option value="visitor">담당자명</option>
       <option value="addr">주소</option>
+      <option value="target">방문예정자명</option>
       <option value="phone">휴대폰번호</option>
       <option value="birth">생년월일</option>
       <option value="note">특이사항</option>
     </select>
-    <input type="text" id="searchInput" placeholder="주소·휴대폰번호·담당자 검색"
+    <input type="text" id="searchInput" placeholder="주소·방문예정자명·휴대폰번호 검색"
            enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false">
     <button id="searchBtn" type="button">검색</button>
   </div>
@@ -948,7 +958,7 @@ const storage = (() => {
   };
 })();
 
-const LIMITS = { addr:80, phone:13, birth:10, note:100, visitor:20 };
+const LIMITS = { addr:80, target:20, phone:13, birth:10, note:100, visitor:20 };
 // v24: 방문주소는 항상 '충청북도 제천시'로 시작하므로, 카드가 새로 만들어질 때
 // 이 접두사를 자동으로 입력칸에 채워두고 사용자는 나머지만 입력하면 되게 한다.
 const ADDR_PREFIX = '충청북도 제천시 ';
@@ -956,15 +966,17 @@ function addrFilled(addr){
   return !!(addr && addr.trim() && addr.trim() !== ADDR_PREFIX.trim());
 }
 // v25: 방문상호/변경상호 → 방문예정자 휴대폰번호/생년월일(자동 나이계산)로 개편
+// v25.2: 빠져 있던 방문예정자명(target) 항목 추가 — 주소 다음, 휴대폰번호 앞에 배치
 const FIELD_META = [
   {key:'visitor', label:'방문담당자명',   type:'input',    max:LIMITS.visitor},
   {key:'addr',    label:'방문주소',       type:'input',    max:LIMITS.addr},
+  {key:'target',  label:'방문예정자명',   type:'input',    max:LIMITS.target},
   {key:'phone',   label:'휴대폰번호',     type:'input',    max:LIMITS.phone, inputType:'tel'},
   {key:'birth',   label:'생년월일',       type:'input',    max:LIMITS.birth, inputType:'date'},
   {key:'note',    label:'특이사항',       type:'textarea', max:LIMITS.note},
 ];
 const FIELD_LABEL = {
-  addr:'방문주소', phone:'휴대폰번호', birth:'생년월일',
+  addr:'방문주소', target:'방문예정자명', phone:'휴대폰번호', birth:'생년월일',
   note:'특이사항', visitor:'방문담당자명', time:'방문시각',
 };
 // 생년월일(YYYY-MM-DD) → 만 나이. 형식이 안 맞거나 미래 날짜면 빈 문자열.
@@ -1043,7 +1055,7 @@ function nowHHMMSS(){
 }
 function emptyVisits(n){
   const count = n || DEFAULT_VISIT_COUNT;
-  return Array.from({length: count}, () => ({addr:ADDR_PREFIX,phone:'',birth:'',note:'',time:'',visitor:'',order:''}));
+  return Array.from({length: count}, () => ({addr:ADDR_PREFIX,target:'',phone:'',birth:'',note:'',time:'',visitor:'',order:''}));
 }
 const _weekdayCache = {};
 function weekdayKR(dateStr){
@@ -1059,7 +1071,7 @@ function keyFor(dateStr, period){ return 'visit-log:'+dateStr+':'+(period||curre
 function legacyKeyFor(dateStr){ return 'visit-log:'+dateStr; } // v19 이전 형식(오전/오후 구분 없음)
 
 function hasAnyData(visits){
-  return visits.some(v => addrFilled(v.addr) || v.phone || v.birth || v.note || v.time || v.visitor);
+  return visits.some(v => addrFilled(v.addr) || v.target || v.phone || v.birth || v.note || v.time || v.visitor);
 }
 
 // 손상된 저장 데이터를 안전하게 보정 (앱이 죽지 않도록)
@@ -1320,7 +1332,7 @@ $('memoText') && $('memoText').addEventListener('input', (e)=>{
 });
 
 function countFilled(visits){
-  return visits.filter(v => addrFilled(v.addr) || v.phone || v.birth || v.note || v.time || v.visitor).length;
+  return visits.filter(v => addrFilled(v.addr) || v.target || v.phone || v.birth || v.note || v.time || v.visitor).length;
 }
 
 function updateProgress(){
@@ -1397,10 +1409,10 @@ async function deleteVisitCard(idx){
     showToast('카드는 최소 1개는 있어야 합니다');
     return;
   }
-  const hasContent = addrFilled(visit.addr) || visit.phone || visit.birth
+  const hasContent = addrFilled(visit.addr) || visit.target || visit.phone || visit.birth
     || visit.note || visit.time || visit.visitor;
   if(hasContent){
-    const label = (visit.visitor || visit.addr || visit.phone || '').trim();
+    const label = (visit.target || visit.visitor || visit.addr || '').trim();
     const ok = await appConfirm({
       title: '방문 ' + (idx+1) + ' 카드를 삭제할까요?',
       html: (label ? '<div class="modal-quote">' + escapeHtml(label.slice(0, 60)) + '</div>' : '')
@@ -1817,12 +1829,13 @@ function buildReportText(dateStr, visits, period, memo){
   lines.push('='.repeat(28));
   let count = 0;
   visits.forEach((v, i)=>{
-    if(!(addrFilled(v.addr)||v.phone||v.birth||v.note||v.time||v.visitor)) return;
+    if(!(addrFilled(v.addr)||v.target||v.phone||v.birth||v.note||v.time||v.visitor)) return;
     count++;
     lines.push('');
     lines.push('[방문 '+(i+1)+']');
     lines.push('방문시각: '+(v.time || '-'));
     lines.push('주소: '+(v.addr||'-'));
+    lines.push('방문예정자명: '+(v.target||'-'));
     lines.push('휴대폰번호: '+(v.phone||'-'));
     lines.push('생년월일: '+(v.birth||'-'));
     lines.push('나이: '+(v.birth ? ageLabel(v.birth) : '-'));
@@ -1846,13 +1859,14 @@ function buildReportHtml(dateStr, visits, period, memo){
   let count = 0;
   const cards = [];
   visits.forEach((v, i)=>{
-    if(!(addrFilled(v.addr)||v.phone||v.birth||v.note||v.time||v.visitor)) return;
+    if(!(addrFilled(v.addr)||v.target||v.phone||v.birth||v.note||v.time||v.visitor)) return;
     count++;
     cards.push(
       '<section class="card"><div class="ch">방문 '+(i+1)+'</div><div class="cb">'
       + row('방문담당자명', v.visitor)
       + row('방문시각', v.time)
       + row('주소', v.addr)
+      + row('방문예정자명', v.target)
       + row('휴대폰번호', v.phone)
       + row('생년월일', v.birth)
       + (v.birth ? row('나이', ageLabel(v.birth)) : '')
@@ -1940,6 +1954,7 @@ function parseReportText(text){
     visits[num-1] = {
       time: get('방문시각').slice(0, 40),
       addr: get('주소').slice(0, LIMITS.addr),
+      target: get('방문예정자명').slice(0, LIMITS.target),
       phone: get('휴대폰번호').slice(0, LIMITS.phone),
       birth: get('생년월일').slice(0, LIMITS.birth),
       note: get('특이사항').slice(0, LIMITS.note),
@@ -2752,7 +2767,7 @@ async function importAddressXlsx(file){
 
   const willOverwrite = items.some((_, i) => {
     const v = currentVisits[i];
-    return v && (addrFilled(v.addr) || v.phone || v.birth || v.note || v.time || v.visitor);
+    return v && (addrFilled(v.addr) || v.target || v.phone || v.birth || v.note || v.time || v.visitor);
   });
   if(willOverwrite){
     const ok = await appConfirm({
@@ -2891,7 +2906,7 @@ async function shiftDate(deltaDays){
 }
 
 // ---------------- 빠른 검색 (v9) ----------------
-// 카드 1장을 하나의 그룹으로 보고, 주소/휴대폰번호/생년월일/특이사항/담당자/시각 중
+// 카드 1장을 하나의 그룹으로 보고, 주소/방문예정자명/휴대폰번호/생년월일/특이사항/담당자/시각 중
 // 하나라도 검색 단어를 포함하면 해당 카드 전체를 결과에 나열한다.
 // 모든 날짜의 저장 기록을 대상으로 한다.
 function escapeHtml(s){
@@ -2914,7 +2929,7 @@ async function doSearch(){
   const query = q.toLowerCase();
   const scope = $('searchScope').value; // all 또는 특정 필드 키
   const searchFields = scope === 'all'
-    ? ['visitor','addr','phone','birth','note','time']
+    ? ['visitor','addr','target','phone','birth','note','time']
     : [scope];
   const results = [];
   try{
@@ -2933,7 +2948,7 @@ async function doSearch(){
         visits = normalizeVisits(parsed);
       }catch(e){ continue; } // 깨진 기록은 건너뜀
       visits.forEach((v, idx) => {
-        if(!(addrFilled(v.addr)||v.phone||v.birth||v.note||v.time||v.visitor)) return;
+        if(!(addrFilled(v.addr)||v.target||v.phone||v.birth||v.note||v.time||v.visitor)) return;
         // 어느 항목이 일치했는지 함께 기록 (결과에 '일치 항목'으로 표시)
         const matched = [];
         searchFields.forEach((k)=>{
@@ -2969,6 +2984,7 @@ function renderSearchResults(query, results, scopeLabel){
       ['방문담당자명', v.visitor || '-'],
       ['방문시각', v.time || '-'],
       ['주소', v.addr || '-'],
+      ['방문예정자명', v.target || '-'],
       ['휴대폰번호', v.phone || '-'],
       ['생년월일', v.birth || '-'],
     ];
