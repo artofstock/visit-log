@@ -12,8 +12,26 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25.2
+  방문일지 (Visit Log) v25.3
   =========================
+  v25.2 → v25.3 개선 사항:
+  1. (기능) 카드가 많을 때 원하는 카드를 보려고 한참 스크롤해야 하던 문제를
+     '카드 색인 탭'으로 해결:
+     - 방문 카드 목록 위에 [전체] [1] [2] [3] ... 탭이 생겨서, 숫자 탭을
+       누르면 그 카드 한 장만 화면에 나오고 나머지는 숨겨짐.
+     - [전체] 탭을 누르면 예전처럼 모든 카드를 위→아래로 쭉 보는 화면으로
+       돌아감(기본값은 항상 '전체'로 시작).
+     - 무언가 입력된 카드는 탭 오른쪽 위에 작은 점 표시가 붙어서, 어떤
+       카드가 이미 채워졌는지 탭만 보고도 구분할 수 있음.
+     - 카드 한 장 보기 모드에서는 카드 맨 아래에 '◀ 이전 카드 / 다음 카드 ▶'
+       버튼도 함께 생겨서 탭까지 안 올라가도 바로 옆 카드로 넘어갈 수 있음.
+     - 날짜·오전/오후를 바꾸거나 파일을 새로 불러오면 자동으로 '전체' 탭으로
+       돌아가서 다른 날짜 기록을 볼 때 헷갈리지 않게 함.
+  2. (오류 수정) v25에서 항목 구성을 바꿀 때 '+ 카드 추가' 버튼과 엑셀
+     주소 가져오기로 새로 만들어지는 카드에는 옛 항목(상호/변경상호)이
+     남아있던 실수를 바로잡음 — 이제 새 카드도 방문예정자명/휴대폰번호/
+     생년월일 항목으로 정상적으로 만들어짐.
+
   v25.1 → v25.2 개선 사항:
   1. (오류 수정) v25에서 항목을 새로 짤 때 방문예정자명이 빠져 있던 문제
      수정. 카드 항목을 [방문담당자명 → 방문주소 → 방문예정자명 → 휴대폰번호
@@ -534,6 +552,51 @@
   }
   .sort-hint b{ color:var(--ink-soft); }
 
+  /* -------------------------- 카드 색인 탭 ------------------------------
+     v25.3: 카드가 많을 때 스크롤을 한참 내려야 원하는 카드를 보는 문제를
+     줄이기 위해 추가. '전체' 탭은 예전처럼 모든 카드를 쭉 스크롤해서 보는
+     화면이고, 숫자 탭을 누르면 그 카드 한 장만 화면에 보여준다.
+  */
+  .card-tabs{
+    display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    padding:2px 2px 10px; margin:-2px -2px 0;
+    scrollbar-width:none;
+  }
+  .card-tabs::-webkit-scrollbar{ display:none; }
+  .card-tab{
+    flex-shrink:0; position:relative; min-width:38px; height:38px; padding:0 4px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-size:13.5px; font-weight:700;
+    border:1.5px solid var(--line-strong); border-radius:var(--r-md);
+    background:var(--card); color:var(--ink-soft); cursor:pointer;
+  }
+  .card-tab.all-tab{ font-family:inherit; font-size:12.5px; padding:0 12px; }
+  .card-tab.active{
+    border-color:var(--teal-dark); background:var(--teal-dark); color:#fff;
+  }
+  .card-tab .tab-dot{
+    position:absolute; top:4px; right:4px; width:6px; height:6px; border-radius:50%;
+    background:var(--brick);
+  }
+  .card-tab.active .tab-dot{ background:#fff; }
+
+  /* 카드 하나만 보는 모드일 때 나머지 카드/구간경로는 화면에서 숨긴다 */
+  #cardsWrap.focused-mode .card{ display:none; }
+  #cardsWrap.focused-mode .card.is-active-card{ display:block; }
+  #cardsWrap.focused-mode .segment-connector{ display:none; }
+  #cardsWrap.focused-mode .segment-connector.is-active-connector{ display:flex; }
+
+  /* 카드 안 이전/다음 이동 버튼 — '전체' 탭에서는 필요 없어서 숨겨둔다 */
+  .card-focus-nav{ display:none; gap:8px; margin-top:2px; padding:0 14px 14px; }
+  #cardsWrap.focused-mode .card-focus-nav{ display:flex; }
+  .card-focus-nav-btn{
+    flex:1; font-size:12.5px; font-weight:700; padding:10px; text-align:center;
+    border:1px solid var(--line-strong); border-radius:var(--r-sm);
+    background:var(--paper-2); color:var(--ink-soft); cursor:pointer;
+  }
+  .card-focus-nav-btn:disabled{ opacity:.4; cursor:default; }
+  .card-focus-nav-btn:not(:disabled):active{ background:var(--teal-pale); color:var(--teal-dark); }
+
   /* -------------------------------- 카드 ------------------------------- */
   .card{
     background:var(--card);
@@ -820,7 +883,7 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v25.2</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25.3</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
@@ -889,6 +952,7 @@
         <button type="button" id="sortByOrderBtn" class="sort-btn">↓ 순서대로 정렬</button>
       </div>
       <p class="sort-hint" id="sortHint">각 카드의 <b>순서</b> 칸에 방문 순서를 적고 정렬을 누르면 그 순서대로 재배열돼요.</p>
+      <div class="card-tabs" id="cardTabs" role="tablist" aria-label="방문 카드 색인"></div>
       <div id="cardsWrap"></div>
       <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
     </div>
@@ -1034,6 +1098,8 @@ let currentView = currentPeriod; // 'AM' | 'PM' | 'MEMO' — 화면에 보이는
 let currentMemo = '';
 let memoSaveTimer = null;
 let currentVisits = emptyVisits();
+// v25.3: null이면 '전체' 탭(모든 카드를 쭉 스크롤), 숫자면 그 인덱스의 카드 한 장만 보여줌
+let activeCardIdx = null;
 let saveTimer = null;
 let backupIntervalId = null;
 let lastBackupAt = 0;
@@ -1221,6 +1287,8 @@ function openSheet(title, items){
 async function loadDate(dateStr, period){
   currentDate = dateStr;
   if(period){ currentPeriod = period; currentView = period; }
+  // 날짜/오전·오후를 바꾸면 이전 화면에서 보던 카드 한 장 모드는 풀고 '전체'로 되돌린다
+  activeCardIdx = null;
   $('dateInput').value = dateStr;
   $('weekdayLabel').textContent = weekdayShortKR(dateStr);
   updatePeriodUI();
@@ -1355,14 +1423,20 @@ function addVisitCard(){
     showToast('카드는 최대 ' + MAX_VISIT_COUNT + '개까지 만들 수 있습니다');
     return;
   }
-  currentVisits.push({addr:ADDR_PREFIX,name:'',changed:'',note:'',time:'',visitor:'',order:''});
+  currentVisits.push({addr:ADDR_PREFIX,target:'',phone:'',birth:'',note:'',time:'',visitor:'',order:''});
+  // 새로 추가한 카드를 바로 보러 갈 수 있게, 보고 있던 탭도 그 카드로 옮겨준다
+  // ('전체' 탭이었다면 그대로 '전체'를 유지)
+  if(activeCardIdx !== null) activeCardIdx = currentVisits.length - 1;
   renderCards();
   saveCurrent();
   showToast('카드가 추가되었습니다 (' + currentVisits.length + '/' + MAX_VISIT_COUNT + ')');
   requestAnimationFrame(()=>{
     const wrap = $('cardsWrap');
-    if(wrap.lastElementChild){
-      wrap.lastElementChild.scrollIntoView({ behavior:'smooth', block:'start' });
+    const target = activeCardIdx !== null
+      ? wrap.querySelector('.is-active-card')
+      : wrap.lastElementChild;
+    if(target){
+      target.scrollIntoView({ behavior:'smooth', block:'start' });
     }
   });
 }
@@ -1425,6 +1499,10 @@ async function deleteVisitCard(idx){
   let padded = false;
   currentVisits.splice(idx, 1);
   if(currentVisits.length === 0){ currentVisits = emptyVisits(1); padded = true; }
+  // 보고 있던 탭 번호가 삭제로 인해 범위를 벗어나면 마지막 카드로 조정
+  if(activeCardIdx !== null){
+    activeCardIdx = Math.min(activeCardIdx, currentVisits.length - 1);
+  }
   renderCards();
   await saveCurrent();
   showToast('방문 ' + (idx+1) + ' 카드를 삭제했습니다', {
@@ -1438,6 +1516,7 @@ async function deleteVisitCard(idx){
       // (그 사이 사용자가 뭔가 적었다면 그대로 둔다)
       if(padded && currentVisits.length === 1 && !hasAnyData(currentVisits)) currentVisits = [];
       currentVisits.splice(Math.min(idx, currentVisits.length), 0, removed);
+      if(activeCardIdx !== null) activeCardIdx = Math.min(idx, currentVisits.length - 1);
       renderCards();
       await saveCurrent();
       showToast('삭제를 되돌렸습니다');
@@ -1463,13 +1542,21 @@ function refreshSortHint(){
 }
 
 function renderCards(){
+  // 카드 삭제/정렬 등으로 개수가 바뀌어도 활성 탭 인덱스가 범위를 벗어나지 않게 보정
+  if(activeCardIdx !== null){
+    if(currentVisits.length === 0){ activeCardIdx = null; }
+    else activeCardIdx = Math.max(0, Math.min(activeCardIdx, currentVisits.length - 1));
+  }
   const wrap = $('cardsWrap');
   wrap.innerHTML = '';
+  wrap.classList.toggle('focused-mode', activeCardIdx !== null);
+  renderCardTabs();
   segConnectors = [];
   const canDelete = currentVisits.length > 1;
   currentVisits.forEach((visit, idx) => {
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'card' + (idx === activeCardIdx ? ' is-active-card' : '');
+    card.dataset.cardIdx = idx;
     card.innerHTML =
       '<div class="card-head">'
       +   '<div class="stub-num">' + (idx+1) + '</div>'
@@ -1618,12 +1705,27 @@ function renderCards(){
       });
       body.appendChild(field);
     });
+
+    // '카드 한 장 보기' 모드일 때만 보이는 이전/다음 이동 버튼
+    const focusNav = document.createElement('div');
+    focusNav.className = 'card-focus-nav';
+    focusNav.innerHTML =
+        '<button type="button" class="card-focus-nav-btn" data-focus-prev'
+      +   (idx === 0 ? ' disabled' : '') + '>◀ ' + idx + '번</button>'
+      + '<button type="button" class="card-focus-nav-btn" data-focus-next'
+      +   (idx === currentVisits.length - 1 ? ' disabled' : '') + '>' + (idx+2) + '번 ▶</button>';
+    const prevBtn = focusNav.querySelector('[data-focus-prev]');
+    const nextBtn = focusNav.querySelector('[data-focus-next]');
+    if(!prevBtn.disabled) prevBtn.addEventListener('click', ()=>selectCardTab(idx-1));
+    if(!nextBtn.disabled) nextBtn.addEventListener('click', ()=>selectCardTab(idx+1));
+    card.appendChild(focusNav);
+
     wrap.appendChild(card);
 
     // 이 카드 → 다음 카드 구간 경로 버튼 (마지막 카드 다음에는 넣지 않음)
     if (idx < currentVisits.length - 1) {
       const connector = document.createElement('div');
-      connector.className = 'segment-connector';
+      connector.className = 'segment-connector' + (idx === activeCardIdx ? ' is-active-connector' : '');
       connector.innerHTML = '<button type="button" class="segment-btn" data-seg-btn>'
         + '<span class="arrow">↓</span> ' + (idx+1) + '번 → ' + (idx+2) + '번 구간 경로'
         + '</button>';
@@ -1639,6 +1741,58 @@ function renderCards(){
   updateAddCardBtn();
   refreshConnectors();
   refreshSortHint();
+}
+
+// v25.3: 카드가 많을 때 한참 스크롤하지 않고도 원하는 카드로 바로 갈 수 있는 색인 탭.
+// '전체' 탭은 예전처럼 모든 카드를 쭉 보여주고, 숫자 탭은 그 카드 한 장만 보여준다.
+function isVisitFilled(v){
+  return !!(v && (addrFilled(v.addr) || v.target || v.phone || v.birth || v.note || v.time || v.visitor));
+}
+function renderCardTabs(){
+  const bar = $('cardTabs');
+  if(!bar) return;
+  bar.innerHTML = '';
+
+  const allTab = document.createElement('button');
+  allTab.type = 'button';
+  allTab.className = 'card-tab all-tab' + (activeCardIdx === null ? ' active' : '');
+  allTab.textContent = '전체';
+  allTab.setAttribute('role', 'tab');
+  allTab.setAttribute('aria-selected', activeCardIdx === null ? 'true' : 'false');
+  allTab.addEventListener('click', ()=>selectCardTab(null));
+  bar.appendChild(allTab);
+
+  currentVisits.forEach((visit, idx) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'card-tab' + (idx === activeCardIdx ? ' active' : '');
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', idx === activeCardIdx ? 'true' : 'false');
+    tab.dataset.tabIdx = idx;
+    tab.textContent = String(idx + 1);
+    if(isVisitFilled(visit)){
+      const dot = document.createElement('span');
+      dot.className = 'tab-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      tab.appendChild(dot);
+    }
+    tab.addEventListener('click', ()=>selectCardTab(idx));
+    bar.appendChild(tab);
+  });
+}
+
+function selectCardTab(idx){
+  if(idx !== null && (idx < 0 || idx >= currentVisits.length)) return;
+  activeCardIdx = idx;
+  renderCards();
+  if(idx !== null){
+    requestAnimationFrame(()=>{
+      const activeTab = $('cardTabs').querySelector('[data-tab-idx="'+idx+'"]');
+      if(activeTab) activeTab.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+      const wrap = $('cardsWrap');
+      if(wrap.scrollIntoView) wrap.scrollIntoView({ behavior:'smooth', block:'start' });
+    });
+  }
 }
 
 // ---------------- 내비 앱 연동 (네이버맵 전용, v25에서 T맵 지원 제거) ----------------
@@ -2780,7 +2934,7 @@ async function importAddressXlsx(file){
   }
 
   while(currentVisits.length < items.length){
-    currentVisits.push({addr:ADDR_PREFIX,name:'',changed:'',note:'',time:'',visitor:'',order:''});
+    currentVisits.push({addr:ADDR_PREFIX,target:'',phone:'',birth:'',note:'',time:'',visitor:'',order:''});
   }
   items.forEach((item, i) => {
     currentVisits[i].addr = item.addr;
@@ -2850,6 +3004,7 @@ async function doImport(file){
   if(period) currentPeriod = period;
   currentView = currentPeriod;
   currentVisits = visits;
+  activeCardIdx = null; // 새로 불러온 기록이니 '전체' 탭부터 보여준다
   $('dateInput').value = currentDate;
   $('weekdayLabel').textContent = weekdayShortKR(currentDate);
   updatePeriodUI();
