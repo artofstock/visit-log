@@ -12,8 +12,19 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25.3
+  방문일지 (Visit Log) v25.4
   =========================
+  v25.3 → v25.4 개선 사항:
+  1. (디자인) 카드 목록 위쪽에서 저장상태·[설정]·"방문 카드 N"·[순서대로
+     정렬]·정렬 안내문이 각각 한 줄씩(총 3줄) 차지하던 것을, 한 줄
+     (저장상태 · 방문 카드 N)  +  점3개 메뉴 버튼으로 합침:
+     - 점3개 버튼을 누르면 [↓ 순서대로 정렬]과 [⚙ 설정]이 파일 메뉴와
+       같은 선택창(시트)으로 뜸. 정렬 안내문은 이제 그 메뉴 안의 설명
+       글로 들어가 있어 평소에는 화면에 안 보임.
+     - 기능은 그대로— 정렬/설정 둘 다 메뉴에서 그대로 실행됨.
+     - 이 변경으로 카드 색인 탭과 카드 본문이 화면 위쪽에 더 가깝게
+       올라와 스크롤 없이 보이는 카드 내용이 늘어남.
+
   v25.2 → v25.3 개선 사항:
   1. (기능) 카드가 많을 때 원하는 카드를 보려고 한참 스크롤해야 하던 문제를
      '카드 색인 탭'으로 해결:
@@ -494,24 +505,37 @@
   .result-row .rv{ flex:1; min-width:0; word-break:break-all; }
   mark{ background:#F5E7A8; color:inherit; padding:0 1px; border-radius:2px; }
 
-  /* 저장 상태 + 설정 — v23의 3줄(자동저장/임시저장/내비앱)을 1줄 + 접이식으로 */
-  .status-row{
+  /* v25.4: 저장상태·방문카드 제목·정렬·설정을 각각 한 줄씩 차지하던 것을
+     한 줄(.visits-toolbar) + 점3개 메뉴 버튼으로 합쳐 화면 위쪽 공간을 줄임.
+     정렬 버튼과 설정 진입, 정렬 안내문은 이제 이 메뉴 버튼을 누르면 뜨는
+     선택창(openSheet) 안에 들어있다. */
+  .visits-toolbar{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
     margin:0 0 12px; padding:0 2px;
+  }
+  .visits-toolbar-info{
+    display:flex; align-items:center; gap:7px; min-width:0; flex-wrap:wrap;
     font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
   }
   .status-left{ display:flex; align-items:center; gap:7px; min-width:0; }
   .status-left .dot{
     width:6px; height:6px; border-radius:50%; background:var(--teal); flex-shrink:0;
   }
-  .gear-btn{
-    display:flex; align-items:center; gap:5px; flex-shrink:0;
-    font-size:11.5px; font-weight:600; color:var(--ink-soft);
-    border:1px solid var(--line-strong); border-radius:var(--r-pill);
-    background:var(--card); padding:5px 11px; cursor:pointer;
+  .toolbar-sep{ color:var(--line-strong); }
+  .visits-toolbar-info .section-title{
+    font-family:'Pretendard','Noto Sans KR',sans-serif; font-size:13px; font-weight:700; color:var(--ink-soft);
   }
-  .gear-btn svg{ width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
-  .gear-btn.active{ background:var(--ink); border-color:var(--ink); color:var(--paper); }
+  .section-count{
+    font-family:'IBM Plex Mono',monospace; color:var(--teal-dark); font-weight:600;
+  }
+  .menu-btn{
+    flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    width:34px; height:34px;
+    border:1px solid var(--line-strong); border-radius:var(--r-pill);
+    background:var(--card); color:var(--ink-soft); cursor:pointer; box-shadow:var(--sh-1);
+  }
+  .menu-btn svg{ width:18px; height:18px; fill:currentColor; }
+  .menu-btn:active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; }
 
   .settings-panel{
     background:var(--card); border:1px solid var(--line);
@@ -530,27 +554,6 @@
   .switch-label input[type=checkbox]{
     width:17px; height:17px; accent-color:var(--teal-dark); cursor:pointer; flex-shrink:0; margin:0;
   }
-  /* 섹션 머리 */
-  .section-head{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    margin:0 0 10px; padding:0 2px;
-  }
-  .section-title{ font-size:13px; font-weight:700; color:var(--ink-soft); }
-  .section-count{
-    font-family:'IBM Plex Mono',monospace; color:var(--teal-dark); font-weight:600;
-  }
-  .sort-btn{
-    flex-shrink:0; font-size:12.5px; font-weight:700; padding:8px 12px; white-space:nowrap;
-    border:1px solid var(--line-strong); border-radius:var(--r-sm);
-    background:var(--card); color:var(--teal-dark); cursor:pointer; box-shadow:var(--sh-1);
-  }
-  .sort-btn:active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; }
-  /* 안내문은 '순서'를 한 번도 안 쓴 상태에서만 보이고, 쓰기 시작하면 사라진다 */
-  .sort-hint{
-    margin:-4px 0 12px; padding:0 2px;
-    font-size:11.5px; line-height:1.55; color:var(--ink-faint);
-  }
-  .sort-hint b{ color:var(--ink-soft); }
 
   /* -------------------------- 카드 색인 탭 ------------------------------
      v25.3: 카드가 많을 때 스크롤을 한참 내려야 원하는 카드를 보는 문제를
@@ -883,7 +886,7 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v25.3</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25.4</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
@@ -931,10 +934,14 @@
   </div>
 
   <div id="dayView" class="day-view">
-    <div class="status-row">
-      <span class="status-left"><span class="dot"></span><span id="lastSaved">—</span></span>
-      <button type="button" class="gear-btn" id="settingsToggle" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2.2"></circle><circle cx="10" cy="17" r="2.2"></circle></svg>설정
+    <div class="visits-toolbar">
+      <div class="visits-toolbar-info">
+        <span class="status-left"><span class="dot"></span><span id="lastSaved">—</span></span>
+        <span class="toolbar-sep">·</span>
+        <span class="section-title">방문 카드 <span class="section-count" id="cardCount">4</span></span>
+      </div>
+      <button type="button" class="menu-btn" id="visitsMenuBtn" aria-haspopup="true" aria-label="카드 메뉴 (정렬·설정)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>
       </button>
     </div>
 
@@ -947,11 +954,6 @@
     </div>
 
     <div id="visitsPanel">
-      <div class="section-head">
-        <div class="section-title">방문 카드 <span class="section-count" id="cardCount">4</span></div>
-        <button type="button" id="sortByOrderBtn" class="sort-btn">↓ 순서대로 정렬</button>
-      </div>
-      <p class="sort-hint" id="sortHint">각 카드의 <b>순서</b> 칸에 방문 순서를 적고 정렬을 누르면 그 순서대로 재배열돼요.</p>
       <div class="card-tabs" id="cardTabs" role="tablist" aria-label="방문 카드 색인"></div>
       <div id="cardsWrap"></div>
       <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
@@ -1465,7 +1467,26 @@ function sortByOrder(){
   scheduleSave();
   showToast('순서대로 정렬했어요');
 }
-$('sortByOrderBtn').addEventListener('click', sortByOrder);
+
+// v25.4: '설정' 버튼과 '순서대로 정렬' 버튼 + 안내문을 각자 한 줄씩 쓰던 걸
+// 점3개 메뉴 버튼 하나로 합침 — 파일 메뉴와 같은 openSheet 방식 재사용.
+function toggleSettingsPanel(forceOpen){
+  const panel = $('settingsPanel');
+  if(!panel) return;
+  const willOpen = typeof forceOpen === 'boolean' ? forceOpen : panel.classList.contains('hide');
+  panel.classList.toggle('hide', !willOpen);
+}
+function openVisitsMenu(){
+  openSheet('카드 메뉴', [
+    { title:'↓ 순서대로 정렬',
+      desc:'각 카드의 순서 칸에 방문 순서를 적어두면 그 순서대로 카드를 재배열해요.',
+      run: sortByOrder },
+    { title:'⚙ 설정',
+      desc:'자동 임시저장 등 세부 설정을 열어요.',
+      run: ()=>toggleSettingsPanel(true) },
+  ]);
+}
+$('visitsMenuBtn').addEventListener('click', openVisitsMenu);
 
 // 아이콘은 외부 파일 없이 인라인 SVG 로 (오프라인 PWA 유지)
 const ICON_TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true">'
@@ -1534,13 +1555,6 @@ function refreshConnectors(){
   });
 }
 
-// 정렬 안내문은 '순서'를 한 번도 쓰지 않은 상태에서만 보여준다 (v24)
-function refreshSortHint(){
-  const hint = $('sortHint');
-  if(!hint) return;
-  hint.classList.toggle('hide', currentVisits.some(v => (v.order || '').trim() !== ''));
-}
-
 function renderCards(){
   // 카드 삭제/정렬 등으로 개수가 바뀌어도 활성 탭 인덱스가 범위를 벗어나지 않게 보정
   if(activeCardIdx !== null){
@@ -1586,7 +1600,6 @@ function renderCards(){
       e.target.value = v;
       currentVisits[idx].order = v;
       orderInput.classList.toggle('filled', !!v);
-      refreshSortHint();
       scheduleSave();
     });
 
@@ -1740,7 +1753,6 @@ function renderCards(){
   updateProgress();
   updateAddCardBtn();
   refreshConnectors();
-  refreshSortHint();
 }
 
 // v25.3: 카드가 많을 때 한참 스크롤하지 않고도 원하는 카드로 바로 갈 수 있는 색인 탭.
@@ -3329,14 +3341,6 @@ $('fileMenuBtn').addEventListener('click', ()=>{
     { title:'주소 내보내기 (엑셀)', desc:'지금 화면에 입력된 방문주소를 엑셀(.xlsx)로 저장합니다',
       run: ()=>exportAddressXlsx() },
   ]);
-});
-
-// v24: 자동 임시저장·내비 앱 설정은 [설정]을 눌렀을 때만 펼친다
-$('settingsToggle').addEventListener('click', ()=>{
-  const panel = $('settingsPanel');
-  const opened = panel.classList.toggle('hide') === false;
-  $('settingsToggle').classList.toggle('active', opened);
-  $('settingsToggle').setAttribute('aria-expanded', opened ? 'true' : 'false');
 });
 
 loadSettings().then(()=>{
