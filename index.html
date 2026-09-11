@@ -12,8 +12,21 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25.4
+  방문일지 (Visit Log) v25.5
   =========================
+  v25.4 → v25.5 개선 사항:
+  1. (디자인) 화면 위쪽 영역을 더 압축해서 3줄로 정리:
+     - 1줄: 날짜(‹ 2026-09-11 (금) ›) 오른쪽에 [오전][오후]를 붙임
+       (기존에는 날짜 줄과 오전/오후/메모 줄이 따로 있었음).
+     - 2줄: [오늘 기록][지난 기록][메모] 뒤에 [검색 🔍]과 [카드 메뉴 ⋯]
+       아이콘을 한 줄에 모음 (메모 버튼이 오전/오후 줄에서 이 줄로 이동).
+     - 3줄: 카드 색인 탭([전체][1][2][3]...) 오른쪽 끝에 "방문카드 N"
+       개수 표시 (예전의 별도 "방문 카드 N" 줄을 없애고 탭 줄에 붙임).
+     - 저장 상태 문구("저장됨 12:34" 등)는 화면에 상시 표시하는 대신
+       [카드 메뉴 ⋯] → [설정] 안에서 확인하도록 옮기고, 저장에 실패했을
+       때만 화면 아래쪽에 토스트로 바로 알려주도록 함(중요한 순간엔
+       놓치지 않으면서 평소엔 화면을 더 넓게 씀).
+
   v25.3 → v25.4 개선 사항:
   1. (디자인) 카드 목록 위쪽에서 저장상태·[설정]·"방문 카드 N"·[순서대로
      정렬]·정렬 안내문이 각각 한 줄씩(총 3줄) 차지하던 것을, 한 줄
@@ -397,66 +410,86 @@
     padding:4px 9px; white-space:nowrap; border-radius:var(--r-pill);
   }
 
-  .date-nav{ display:flex; align-items:center; gap:8px; }
+  .date-nav{ display:flex; align-items:center; gap:6px; }
   .date-nav button{
-    width:38px; height:40px; flex-shrink:0;
+    width:34px; height:38px; flex-shrink:0;
     border-radius:var(--r-sm); border:1px solid var(--line-strong);
     background:var(--card); color:var(--ink-soft);
-    font-size:18px; font-family:'IBM Plex Mono',monospace; line-height:1;
+    font-size:17px; font-family:'IBM Plex Mono',monospace; line-height:1;
     cursor:pointer; box-shadow:var(--sh-1);
   }
   .date-nav button:active{ background:var(--paper-2); color:var(--ink); transform:scale(.97); }
   .date-display{
-    flex:1; min-width:0; height:40px;
+    flex:1; min-width:0; height:38px;
     border:1px solid var(--line-strong); background:var(--card);
-    padding:0 12px; border-radius:var(--r-sm);
-    display:flex; align-items:center; gap:8px;
+    padding:0 8px; border-radius:var(--r-sm);
+    display:flex; align-items:center; gap:5px;
     box-shadow:var(--sh-1);
   }
   .date-display input[type=date]{
     border:none; background:transparent; padding:0;
     font-family:'IBM Plex Mono',monospace;
-    font-size:14px; font-weight:600; color:var(--ink);
+    font-size:13.5px; font-weight:600; color:var(--ink);
     flex:1; min-width:0;
   }
   .date-display input[type=date]:focus{ outline:none; }
-  .weekday{ color:var(--teal-dark); font-size:13px; font-weight:600; flex-shrink:0; }
+  .weekday{ color:var(--teal-dark); font-size:12.5px; font-weight:600; flex-shrink:0; }
 
-  .period-toggle{
-    display:flex; gap:4px; margin-top:10px;
-    background:var(--paper-2); border-radius:var(--r-sm); padding:4px;
+  /* v25.5: 오전/오후는 날짜 줄 오른쪽에 붙여서 한 줄로, 메모는 아래 화면전환
+     줄로 옮겨서 전체 상단을 3줄(날짜+오전오후 / 화면전환+메모+검색+메뉴 /
+     카드 색인탭+개수)로 압축했다. */
+  .ampm-toggle{
+    display:flex; gap:3px; flex-shrink:0;
+    background:var(--paper-2); border-radius:var(--r-sm); padding:3px;
   }
-  .period-btn{
-    flex:1; border:none; border-radius:calc(var(--r-sm) - 3px);
+  .ampm-btn{
+    flex-shrink:0; border:none; border-radius:calc(var(--r-sm) - 2px);
     background:transparent; color:var(--ink-soft);
-    font-weight:700; font-size:13.5px; padding:9px 4px; cursor:pointer;
+    font-weight:700; font-size:12px; padding:8px 9px; cursor:pointer; white-space:nowrap;
   }
   .period-btn.active{ background:var(--teal-dark); color:#fff; box-shadow:var(--sh-1); }
   .period-btn.memo-btn.active{ background:var(--brick); }
   .period-btn .period-count{
-    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:11.5px;
-    opacity:.8; margin-left:3px;
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:11px;
+    opacity:.8; margin-left:2px;
   }
 
   /* -------------------------------- 본문 ------------------------------- */
   main{ position:relative; z-index:1; padding:14px 16px 16px; }
 
-  /* 화면 전환 + 검색 열기 — v23의 '탭 줄 + 검색 줄' 2줄을 1줄로 합침 */
-  .viewbar{ display:flex; gap:6px; margin-bottom:12px; }
+  /* 화면 전환 + 메모 + 검색 열기 + 카드 메뉴 — 한 줄에 모아 공간을 아낀다 (v25.5) */
+  .viewbar{ display:flex; gap:5px; margin-bottom:12px; }
   .viewbar button{
-    flex:1; padding:9px 6px; font-size:13px; font-weight:600;
+    flex:1; min-width:0; padding:9px 4px; font-size:12.5px; font-weight:600;
     border:1px solid var(--line-strong); border-radius:var(--r-sm);
-    background:var(--card); color:var(--ink-soft); cursor:pointer;
+    background:var(--card); color:var(--ink-soft); cursor:pointer; white-space:nowrap;
   }
   .viewbar button.active{
     background:var(--ink); border-color:var(--ink); color:var(--paper);
     box-shadow:var(--sh-1);
   }
   .icon-btn{
-    flex:0 0 44px !important; padding:0 !important;
+    flex:0 0 40px !important; padding:0 !important;
     display:flex; align-items:center; justify-content:center;
   }
-  .icon-btn svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .icon-btn svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .icon-btn.menu-btn svg{ fill:currentColor; stroke:none; }
+
+  /* 카드 색인 탭 줄 오른쪽 끝의 "방문카드 N" 개수 표시 */
+  .card-tabs-row{ display:flex; align-items:center; gap:8px; }
+  .card-tabs-row .card-tabs{ flex:1; min-width:0; padding-bottom:2px; margin-bottom:0; }
+  .card-tabs-count{
+    flex-shrink:0; font-family:'IBM Plex Mono',monospace; font-size:11.5px;
+    font-weight:600; color:var(--ink-soft); white-space:nowrap; padding-bottom:8px;
+  }
+  .card-tabs-count #cardCount{ color:var(--teal-dark); }
+
+  /* 저장 상태 줄 (설정 패널 맨 위, 설정을 열어야 보임) */
+  .save-status-item{
+    display:flex; align-items:center; padding:10px 0;
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
+  }
+  .save-status-item + .setting-item{ border-top:1px solid var(--line); }
 
   .search-bar{ display:none; gap:6px; margin-bottom:12px; }
   .search-bar.show{ display:flex; }
@@ -505,37 +538,11 @@
   .result-row .rv{ flex:1; min-width:0; word-break:break-all; }
   mark{ background:#F5E7A8; color:inherit; padding:0 1px; border-radius:2px; }
 
-  /* v25.4: 저장상태·방문카드 제목·정렬·설정을 각각 한 줄씩 차지하던 것을
-     한 줄(.visits-toolbar) + 점3개 메뉴 버튼으로 합쳐 화면 위쪽 공간을 줄임.
-     정렬 버튼과 설정 진입, 정렬 안내문은 이제 이 메뉴 버튼을 누르면 뜨는
-     선택창(openSheet) 안에 들어있다. */
-  .visits-toolbar{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    margin:0 0 12px; padding:0 2px;
-  }
-  .visits-toolbar-info{
-    display:flex; align-items:center; gap:7px; min-width:0; flex-wrap:wrap;
-    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);
-  }
   .status-left{ display:flex; align-items:center; gap:7px; min-width:0; }
   .status-left .dot{
     width:6px; height:6px; border-radius:50%; background:var(--teal); flex-shrink:0;
   }
-  .toolbar-sep{ color:var(--line-strong); }
-  .visits-toolbar-info .section-title{
-    font-family:'Pretendard','Noto Sans KR',sans-serif; font-size:13px; font-weight:700; color:var(--ink-soft);
-  }
-  .section-count{
-    font-family:'IBM Plex Mono',monospace; color:var(--teal-dark); font-weight:600;
-  }
-  .menu-btn{
-    flex-shrink:0; display:flex; align-items:center; justify-content:center;
-    width:34px; height:34px;
-    border:1px solid var(--line-strong); border-radius:var(--r-pill);
-    background:var(--card); color:var(--ink-soft); cursor:pointer; box-shadow:var(--sh-1);
-  }
-  .menu-btn svg{ width:18px; height:18px; fill:currentColor; }
-  .menu-btn:active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; }
+  .icon-btn.menu-btn:active{ background:var(--teal-dark); border-color:var(--teal-dark); color:#fff; }
 
   .settings-panel{
     background:var(--card); border:1px solid var(--line);
@@ -876,6 +883,18 @@
     }
   }
 
+  /* v25.5: 아주 좁은 화면(구형 소형 스마트폰)에서 날짜줄·화면전환줄이
+     빽빽해지지 않도록 글자·여백을 한 단계 더 줄인다 */
+  @media (max-width: 360px){
+    .date-nav button{ width:30px; }
+    .date-display{ padding:0 6px; }
+    .date-display input[type=date]{ font-size:12.5px; }
+    .weekday{ font-size:11.5px; }
+    .ampm-btn{ padding:8px 7px; font-size:11.5px; }
+    .viewbar button{ font-size:11.5px; padding:9px 2px; }
+    .icon-btn{ flex-basis:36px !important; }
+  }
+
   @media (prefers-reduced-motion: reduce){
     *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
   }
@@ -886,7 +905,7 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v25.4</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25.5</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
@@ -896,11 +915,10 @@
       <span class="weekday" id="weekdayLabel">(월)</span>
     </div>
     <button id="nextDay" type="button" aria-label="다음 날짜">›</button>
-  </div>
-  <div class="period-toggle" id="periodToggle">
-    <button type="button" class="period-btn" data-view="AM">오전<span class="period-count" id="periodCountAM"></span></button>
-    <button type="button" class="period-btn" data-view="PM">오후<span class="period-count" id="periodCountPM"></span></button>
-    <button type="button" class="period-btn memo-btn" data-view="MEMO">메모<span class="period-count" id="memoCount"></span></button>
+    <div class="ampm-toggle" id="periodToggle">
+      <button type="button" class="period-btn ampm-btn" data-view="AM">오전<span class="period-count" id="periodCountAM"></span></button>
+      <button type="button" class="period-btn ampm-btn" data-view="PM">오후<span class="period-count" id="periodCountPM"></span></button>
+    </div>
   </div>
 </header>
 
@@ -908,8 +926,12 @@
   <div class="viewbar">
     <button id="tabDay" class="active" type="button">오늘 기록</button>
     <button id="tabHistory" type="button">지난 기록</button>
+    <button type="button" class="period-btn memo-btn" data-view="MEMO">메모<span class="period-count" id="memoCount"></span></button>
     <button id="searchToggle" class="icon-btn" type="button" aria-label="빠른 검색">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+    </button>
+    <button type="button" class="icon-btn menu-btn" id="visitsMenuBtn" aria-haspopup="true" aria-label="카드 메뉴 (정렬·설정)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>
     </button>
   </div>
 
@@ -934,18 +956,10 @@
   </div>
 
   <div id="dayView" class="day-view">
-    <div class="visits-toolbar">
-      <div class="visits-toolbar-info">
-        <span class="status-left"><span class="dot"></span><span id="lastSaved">—</span></span>
-        <span class="toolbar-sep">·</span>
-        <span class="section-title">방문 카드 <span class="section-count" id="cardCount">4</span></span>
-      </div>
-      <button type="button" class="menu-btn" id="visitsMenuBtn" aria-haspopup="true" aria-label="카드 메뉴 (정렬·설정)">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>
-      </button>
-    </div>
-
     <div class="settings-panel hide" id="settingsPanel">
+      <div class="setting-item save-status-item">
+        <span class="status-left"><span class="dot"></span><span id="lastSaved">—</span></span>
+      </div>
       <label class="setting-item switch-label">
         <input type="checkbox" id="autoBackupToggle" checked>
         <span class="setting-text">5분마다 자동 임시저장<small>기기 안에만 조용히 저장돼요</small></span>
@@ -954,7 +968,10 @@
     </div>
 
     <div id="visitsPanel">
-      <div class="card-tabs" id="cardTabs" role="tablist" aria-label="방문 카드 색인"></div>
+      <div class="card-tabs-row">
+        <div class="card-tabs" id="cardTabs" role="tablist" aria-label="방문 카드 색인"></div>
+        <span class="card-tabs-count">방문카드 <span id="cardCount">4</span></span>
+      </div>
       <div id="cardsWrap"></div>
       <button type="button" id="addCardBtn" class="add-card-btn">+ 카드 추가</button>
     </div>
@@ -1477,12 +1494,14 @@ function toggleSettingsPanel(forceOpen){
   panel.classList.toggle('hide', !willOpen);
 }
 function openVisitsMenu(){
+  const statusEl = $('lastSaved');
+  const statusText = statusEl ? statusEl.textContent : '';
   openSheet('카드 메뉴', [
     { title:'↓ 순서대로 정렬',
       desc:'각 카드의 순서 칸에 방문 순서를 적어두면 그 순서대로 카드를 재배열해요.',
       run: sortByOrder },
     { title:'⚙ 설정',
-      desc:'자동 임시저장 등 세부 설정을 열어요.',
+      desc:'자동 임시저장 등 세부 설정을 열어요.' + (statusText ? ' (' + statusText + ')' : ''),
       run: ()=>toggleSettingsPanel(true) },
   ]);
 }
@@ -1926,12 +1945,16 @@ function scheduleSave(){
 }
 
 async function saveCurrent(){
+  const statusEl = $('lastSaved');
   try{
     await storage.set(keyFor(currentDate, currentPeriod), JSON.stringify(currentVisits));
-    $('lastSaved').textContent = '저장됨 ' + nowHHMMSS().slice(0,5);
+    if(statusEl) statusEl.textContent = '저장됨 ' + nowHHMMSS().slice(0,5);
     refreshPeriodCounts();
   }catch(e){
-    $('lastSaved').textContent = '저장 실패';
+    if(statusEl) statusEl.textContent = '저장 실패';
+    // v25.5: 저장 상태 문구가 설정 패널 안으로 들어가 평소엔 안 보이므로,
+    // 저장이 실패했을 때만큼은 토스트로 바로 알려준다.
+    showToast('저장 실패 — 기기 저장공간을 확인해주세요');
   }
 }
 
