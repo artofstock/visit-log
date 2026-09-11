@@ -12,8 +12,20 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25.5
+  방문일지 (Visit Log) v25.6
   =========================
+  v25.5 → v25.6 개선 사항:
+  1. (오류 수정) v25.5에서 날짜 줄에 오전/오후 버튼을 붙였을 때, 기기에
+     따라 달력 입력칸(연/월/일 3구간 + 달력 아이콘)이 생각보다 넓게
+     그려져서 뒤에 있는 [오전][오후] 글자가 화면 밖으로 밀려 잘려 보이던
+     문제를 고침.
+     - 진짜 달력 입력칸은 투명하게 만들어 그 자리 전체에 그대로 겹쳐두고
+       (탭하면 여전히 네이티브 달력이 그대로 뜸), 화면에는 우리가 만든
+       작은 달력 아이콘 + "2026-09-11" 글자만 보이도록 바꿈.
+     - 그 덕에 날짜 표시 폭이 기기·브라우저에 상관없이 항상 일정해져서
+       오전/오후 버튼이 더 이상 밀려나거나 잘리지 않음.
+     - 탭 동작(날짜 선택)은 이전과 동일하게 작동함.
+
   v25.4 → v25.5 개선 사항:
   1. (디자인) 화면 위쪽 영역을 더 압축해서 3줄로 정리:
      - 1줄: 날짜(‹ 2026-09-11 (금) ›) 오른쪽에 [오전][오후]를 붙임
@@ -419,21 +431,40 @@
     cursor:pointer; box-shadow:var(--sh-1);
   }
   .date-nav button:active{ background:var(--paper-2); color:var(--ink); transform:scale(.97); }
+  /* v25.6: 네이티브 date input 자체는 기기에 따라 최소 너비가 꽤 커서
+     (달력 아이콘+연/월/일 세 구간), 화면이 좁으면 뒤에 붙인 오전/오후
+     버튼을 밀어내 잘려 보이는 문제가 있었다. 그래서 실제 input은 투명하게
+     칸 전체에 겹쳐 놓아 탭하면 그대로 네이티브 달력이 열리게 하고,
+     화면에 보이는 아이콘+글자는 우리가 원하는 만큼만 작게 그린다. */
   .date-display{
+    position:relative;
     flex:1; min-width:0; height:38px;
     border:1px solid var(--line-strong); background:var(--card);
-    padding:0 8px; border-radius:var(--r-sm);
+    padding:0 9px; border-radius:var(--r-sm);
     display:flex; align-items:center; gap:5px;
     box-shadow:var(--sh-1);
   }
-  .date-display input[type=date]{
-    border:none; background:transparent; padding:0;
+  .date-icon{
+    flex-shrink:0; width:14px; height:14px;
+    stroke:var(--ink-soft); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+  }
+  .date-text{
+    flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
     font-family:'IBM Plex Mono',monospace;
     font-size:13.5px; font-weight:600; color:var(--ink);
-    flex:1; min-width:0;
   }
-  .date-display input[type=date]:focus{ outline:none; }
   .weekday{ color:var(--teal-dark); font-size:12.5px; font-weight:600; flex-shrink:0; }
+  .date-input-native{
+    position:absolute; inset:0; width:100%; height:100%;
+    opacity:0; border:0; padding:0; margin:0; cursor:pointer;
+    font-size:16px; /* iOS가 탭 시 확대하지 않도록 16px 이상으로 고정(화면엔 안 보임) */
+  }
+  .date-input-native:focus-visible ~ .date-icon,
+  .date-input-native:focus-visible ~ .date-text{ text-decoration:underline; }
+  .date-display:has(.date-input-native:focus-visible){
+    outline:2px solid var(--teal); outline-offset:1px;
+  }
+  .date-display:active{ background:var(--paper-2); }
 
   /* v25.5: 오전/오후는 날짜 줄 오른쪽에 붙여서 한 줄로, 메모는 아래 화면전환
      줄로 옮겨서 전체 상단을 3줄(날짜+오전오후 / 화면전환+메모+검색+메뉴 /
@@ -888,7 +919,8 @@
   @media (max-width: 360px){
     .date-nav button{ width:30px; }
     .date-display{ padding:0 6px; }
-    .date-display input[type=date]{ font-size:12.5px; }
+    .date-text{ font-size:12.5px; }
+    .date-icon{ width:12px; height:12px; }
     .weekday{ font-size:11.5px; }
     .ampm-btn{ padding:8px 7px; font-size:11.5px; }
     .viewbar button{ font-size:11.5px; padding:9px 2px; }
@@ -905,14 +937,16 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v25.5</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25.6</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
     <button id="prevDay" type="button" aria-label="이전 날짜">‹</button>
     <div class="date-display">
-      <input type="date" id="dateInput">
+      <svg class="date-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+      <span class="date-text" id="dateText">2026-09-11</span>
       <span class="weekday" id="weekdayLabel">(월)</span>
+      <input type="date" id="dateInput" class="date-input-native" aria-label="날짜 선택 (탭하여 달력 열기)">
     </div>
     <button id="nextDay" type="button" aria-label="다음 날짜">›</button>
     <div class="ampm-toggle" id="periodToggle">
@@ -1309,6 +1343,7 @@ async function loadDate(dateStr, period){
   // 날짜/오전·오후를 바꾸면 이전 화면에서 보던 카드 한 장 모드는 풀고 '전체'로 되돌린다
   activeCardIdx = null;
   $('dateInput').value = dateStr;
+  $('dateText').textContent = dateStr;
   $('weekdayLabel').textContent = weekdayShortKR(dateStr);
   updatePeriodUI();
   try{
@@ -3041,6 +3076,7 @@ async function doImport(file){
   currentVisits = visits;
   activeCardIdx = null; // 새로 불러온 기록이니 '전체' 탭부터 보여준다
   $('dateInput').value = currentDate;
+  $('dateText').textContent = currentDate;
   $('weekdayLabel').textContent = weekdayShortKR(currentDate);
   updatePeriodUI();
   renderCards();
