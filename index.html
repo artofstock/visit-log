@@ -12,8 +12,24 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25.6
+  방문일지 (Visit Log) v25.7
   =========================
+  v25.6 → v25.7 개선 사항:
+  1. (오류 수정) v25.6에서도 실제 기기(폭 383~412px대의 흔한 안드로이드
+     화면)에서는 여유가 4px 안팎으로 너무 빠듯해, 폰트 렌더링 방식이나
+     "글자 크게" 접근성 설정에 따라 [오후] 버튼(및 방문 건수 배지)이
+     화면 밖으로 밀려 잘려 보이는 경우가 있었음(사용자 스크린샷으로 확인).
+     - 좁은 화면 전용 압축 스타일이 적용되는 기준폭을 360px → 400px로
+       넓혀서, 그동안 사각지대였던 383~400px대 기기도 더 작고 안전한
+       크기로 표시되게 함.
+     - 오전/오후 버튼의 기본 크기(패딩·글자)도 한 단계 줄여 여유를 더
+       확보함.
+     - 그래도 자리가 정말 부족한 극단적인 경우를 위해, 날짜 줄이 꽉 차면
+       [오전][오후] 줄이 화면 밖으로 잘리는 대신 날짜 줄 아래로 자동
+       줄바꿈되도록 안전장치를 추가함(항상 탭 가능한 상태로 보임).
+     - 만약을 대비해 화면 전체에 가로 스크롤/잘림이 생기지 않도록
+       body에도 안전장치를 추가함.
+
   v25.5 → v25.6 개선 사항:
   1. (오류 수정) v25.5에서 날짜 줄에 오전/오후 버튼을 붙였을 때, 기기에
      따라 달력 입력칸(연/월/일 3구간 + 달력 아이콘)이 생각보다 넓게
@@ -369,7 +385,7 @@
   }
 
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
+  html,body{margin:0;padding:0;max-width:100%;overflow-x:hidden;}
   body{
     background:
       radial-gradient(1100px 460px at 50% -140px, rgba(255,255,255,.5), transparent 62%),
@@ -422,7 +438,11 @@
     padding:4px 9px; white-space:nowrap; border-radius:var(--r-pill);
   }
 
-  .date-nav{ display:flex; align-items:center; gap:6px; }
+  /* v25.7: 실제 기기에서 날짜 줄이 383~412px대 폭에서도 [오전][오후]를
+     화면 밖으로 밀어내는 경우가 있어, 정말 자리가 없을 때는 오전/오후
+     줄이 날짜 줄 아래로 자연스럽게 줄바꿈되도록 안전장치를 추가했다
+     (절대 화면 밖으로 잘려서 안 보이는 일이 없도록). */
+  .date-nav{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; row-gap:6px; }
   .date-nav button{
     width:34px; height:38px; flex-shrink:0;
     border-radius:var(--r-sm); border:1px solid var(--line-strong);
@@ -438,7 +458,7 @@
      화면에 보이는 아이콘+글자는 우리가 원하는 만큼만 작게 그린다. */
   .date-display{
     position:relative;
-    flex:1; min-width:0; height:38px;
+    flex:1 1 110px; min-width:110px; height:38px;
     border:1px solid var(--line-strong); background:var(--card);
     padding:0 9px; border-radius:var(--r-sm);
     display:flex; align-items:center; gap:5px;
@@ -476,7 +496,9 @@
   .ampm-btn{
     flex-shrink:0; border:none; border-radius:calc(var(--r-sm) - 2px);
     background:transparent; color:var(--ink-soft);
-    font-weight:700; font-size:12px; padding:8px 9px; cursor:pointer; white-space:nowrap;
+    font-weight:700; font-size:11.5px; padding:0 8px; height:34px;
+    display:inline-flex; align-items:center; justify-content:center;
+    cursor:pointer; white-space:nowrap;
   }
   .period-btn.active{ background:var(--teal-dark); color:#fff; box-shadow:var(--sh-1); }
   .period-btn.memo-btn.active{ background:var(--brick); }
@@ -915,14 +937,16 @@
   }
 
   /* v25.5: 아주 좁은 화면(구형 소형 스마트폰)에서 날짜줄·화면전환줄이
-     빽빽해지지 않도록 글자·여백을 한 단계 더 줄인다 */
-  @media (max-width: 360px){
+     빽빽해지지 않도록 글자·여백을 한 단계 더 줄인다
+     (v25.7: 기준폭을 360→400px로 넓혀 실제 기기(383~412px대)에서도
+     이 여유 있는 크기가 적용되도록 함) */
+  @media (max-width: 400px){
     .date-nav button{ width:30px; }
-    .date-display{ padding:0 6px; }
+    .date-display{ min-width:96px; padding:0 6px; }
     .date-text{ font-size:12.5px; }
     .date-icon{ width:12px; height:12px; }
     .weekday{ font-size:11.5px; }
-    .ampm-btn{ padding:8px 7px; font-size:11.5px; }
+    .ampm-btn{ padding:0 6px; font-size:11px; height:32px; }
     .viewbar button{ font-size:11.5px; padding:9px 2px; }
     .icon-btn{ flex-basis:36px !important; }
   }
@@ -937,7 +961,7 @@
 
 <header>
   <div class="app-bar">
-    <h1 class="brand">방문일지<span class="ver-tag">v25.6</span></h1>
+    <h1 class="brand">방문일지<span class="ver-tag">v25.7</span></h1>
     <span class="progress-chip" id="progressChip">작성 0/4</span>
   </div>
   <div class="date-nav">
