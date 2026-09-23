@@ -936,6 +936,33 @@
     }
   }
 
+  /* v25.8: 갤럭시 탭 등 충분히 넓은 화면(가로 900px 이상 — 태블릿 가로모드
+     기준)에서는 폭을 더 넓게 쓰고, 방문 카드를 2열로 배치해 스크롤을
+     줄이고 화면을 효율적으로 활용한다. 620px 이상 900px 미만(태블릿
+     세로모드 등)에서는 기존처럼 1열 폭 제한(560px) 레이아웃을 그대로 쓴다. */
+  @media (min-width: 900px){
+    header > *, main{ max-width:1040px; }
+    .actionbar{
+      padding-left:calc((100% - 1040px) / 2);
+      padding-right:calc((100% - 1040px) / 2);
+    }
+    #cardsWrap{
+      column-count:2;
+      column-gap:18px;
+    }
+    #cardsWrap .card,
+    #cardsWrap .segment-connector{
+      break-inside:avoid;
+      -webkit-column-break-inside:avoid;
+      page-break-inside:avoid;
+    }
+    /* 카드 색인 탭에서 카드 한 장만 보는 모드일 때는 2열이 의미가 없으므로
+       1열로 되돌린다 */
+    #cardsWrap.focused-mode{
+      column-count:1;
+    }
+  }
+
   /* v25.5: 아주 좁은 화면(구형 소형 스마트폰)에서 날짜줄·화면전환줄이
      빽빽해지지 않도록 글자·여백을 한 단계 더 줄인다
      (v25.7: 기준폭을 360→400px로 넓혀 실제 기기(383~412px대)에서도
