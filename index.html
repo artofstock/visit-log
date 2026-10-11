@@ -12,8 +12,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!--
-  방문일지 (Visit Log) v25.7
+  방문일지 (Visit Log) v25.8
   =========================
+  v25.7 → v25.8 개선 사항:
+  1. (기능) 길찾기 앱 선택 복원: 설정 패널에서 [네이버맵 / T맵]을 고를 수 있음.
+     - 선택값은 설정(visit-log:settings)에 저장되며 기본값은 네이버맵.
+     - 주소 옆 길찾기 버튼과 'N번 → N+1번 구간 경로' 버튼이 선택한 앱으로 열림.
+     - 길찾기 버튼은 어떤 앱을 골라도 크기가 같도록 두 글자 중 긴 쪽 폭에 맞춤.
+
   v25.6 → v25.7 개선 사항:
   1. (오류 수정) v25.6에서도 실제 기기(폭 383~412px대의 흔한 안드로이드
      화면)에서는 여유가 4px 안팎으로 너무 빠듯해, 폰트 렌더링 방식이나
@@ -611,6 +617,14 @@
   .setting-text small{ display:block; font-size:11px; color:var(--ink-faint); margin-top:2px; }
   .setting-val{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-faint); flex-shrink:0; }
   .switch-label{ cursor:pointer; }
+  /* v25.8: 길찾기 앱 선택 (네이버맵 / T맵) */
+  .app-toggle{ display:flex; flex-shrink:0; border:1px solid var(--teal-dark); border-radius:var(--r-sm); overflow:hidden; }
+  .app-toggle button{
+    border:0; background:var(--teal-pale); color:var(--teal-dark);
+    font-size:12.5px; font-weight:700; padding:7px 12px; cursor:pointer; white-space:nowrap;
+  }
+  .app-toggle button + button{ border-left:1px solid var(--teal-dark); }
+  .app-toggle button.on{ background:var(--teal-dark); color:#fff; }
   .switch-label input[type=checkbox]{
     width:17px; height:17px; accent-color:var(--teal-dark); cursor:pointer; flex-shrink:0; margin:0;
   }
@@ -767,6 +781,12 @@
   }
   .nav-btn:active{ background:var(--teal-dark); color:#fff; }
   .nav-btn.loading{ opacity:.55; pointer-events:none; }
+  /* v25.8: 네이버맵/T맵 글자를 같은 칸에 겹쳐 놓고 안 고른 쪽은 숨겨서,
+     어떤 앱을 골라도 버튼 크기가 항상 (네이버맵 길찾기 기준으로) 같게 유지 */
+  .nav-lbls{ display:grid; }
+  .nav-lbls > span{ grid-area:1 / 1; text-align:center; }
+  .nav-btn[data-app="naver"] .nav-lbl-tmap,
+  .nav-btn[data-app="tmap"] .nav-lbl-naver{ visibility:hidden; }
 
   /* 생년월일 + 자동 계산된 나이 표시 */
   .birth-row{ display:flex; gap:6px; }
@@ -1050,6 +1070,13 @@
         <span class="setting-text">5분마다 자동 임시저장<small>기기 안에만 조용히 저장돼요</small></span>
         <span class="setting-val" id="lastBackup">—</span>
       </label>
+      <div class="setting-item">
+        <span class="setting-text">길찾기 앱<small>길찾기 버튼이 열 내비게이션 앱</small></span>
+        <div class="app-toggle" id="navAppToggle" role="group" aria-label="길찾기 앱 선택">
+          <button type="button" data-nav-app="naver">네이버맵</button>
+          <button type="button" data-nav-app="tmap">T맵</button>
+        </div>
+      </div>
     </div>
 
     <div id="visitsPanel">
@@ -1208,6 +1235,7 @@ let saveTimer = null;
 let backupIntervalId = null;
 let lastBackupAt = 0;
 let autoBackupEnabled = true;
+let navApp = 'naver'; // 'naver' | 'tmap'
 
 function $(id){ return document.getElementById(id); }
 
@@ -1273,14 +1301,17 @@ async function loadSettings(){
     const res = await storage.get(SETTINGS_KEY);
     const s = res && res.value ? JSON.parse(res.value) : {};
     autoBackupEnabled = s.autoBackup !== false;
+    navApp = s.navApp === 'tmap' ? 'tmap' : 'naver';
   }catch(e){
     autoBackupEnabled = true;
+    navApp = 'naver';
   }
   $('autoBackupToggle').checked = autoBackupEnabled;
+  syncNavAppUI();
 }
 async function saveSettings(){
   try{
-    await storage.set(SETTINGS_KEY, JSON.stringify({ autoBackup: autoBackupEnabled }));
+    await storage.set(SETTINGS_KEY, JSON.stringify({ autoBackup: autoBackupEnabled, navApp: navApp }));
   }catch(e){}
 }
 
@@ -1748,7 +1779,9 @@ function renderCards(){
         field.innerHTML = labelHtml
           + '<div class="addr-row">'
           +   '<textarea '+common+' rows="2" enterkeyhint="next"></textarea>'
-          +   '<button type="button" class="nav-btn" data-nav-btn title="네이버맵으로 길찾기">네이버맵 길찾기</button>'
+          +   '<button type="button" class="nav-btn" data-nav-btn data-app="'+navApp+'" title="'+navAppName()+'으로 길찾기">'
+          +     '<span class="nav-lbls"><span class="nav-lbl-naver">네이버맵 길찾기</span><span class="nav-lbl-tmap">T맵 길찾기</span></span>'
+          +   '</button>'
           + '</div>';
       } else if(meta.key === 'birth'){
         field.innerHTML = labelHtml
@@ -1912,12 +1945,49 @@ function selectCardTab(idx){
   }
 }
 
-// ---------------- 내비 앱 연동 (네이버맵 전용, v25에서 T맵 지원 제거) ----------------
-// 방문주소 → 좌표 변환(지오코딩) 후 네이버맵을 목적지 경로안내 화면으로 바로 실행.
-// 좌표를 못 찾으면 네이버맵의 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
+// ---------------- 내비 앱 연동 (네이버맵 / T맵 선택, v25.8) ----------------
+// 방문주소 → 좌표 변환(지오코딩) 후 선택한 앱을 목적지 경로안내 화면으로 바로 실행.
+// 좌표를 못 찾으면 앱의 검색 화면으로라도 열어서 최소한 앱 실행 + 주소 검색까지는 되게 함.
+const TMAP_STORE_IOS = 'https://apps.apple.com/kr/app/id431589174';
+const TMAP_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
 const NAVER_STORE_IOS = 'https://apps.apple.com/kr/app/id311867728';
 const NAVER_STORE_AOS = 'https://play.google.com/store/apps/details?id=com.nhn.android.nmap';
 const NAVER_APPNAME = 'com.atlaslab.visitlog'; // 네이버맵 URL Scheme 필수 식별자(임의 문자열 가능)
+
+function navAppName(){ return navApp === 'tmap' ? 'T맵' : '네이버맵'; }
+function navStoreUrl(){
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(navApp === 'tmap') return isIOS ? TMAP_STORE_IOS : TMAP_STORE_AOS;
+  return isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
+}
+// 선택한 앱 기준 URL Scheme 만들기 (T맵은 경도=x, 위도=y)
+function navSearchUrl(enc){
+  return navApp === 'tmap'
+    ? 'tmap://search?name='+enc
+    : 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME;
+}
+function navRouteUrl(fromGeo, sEnc, toGeo, dEnc){
+  if(navApp === 'tmap'){
+    let u = 'tmap://route?goalname='+dEnc+'&goalx='+toGeo.lon+'&goaly='+toGeo.lat;
+    if(fromGeo) u += '&startname='+sEnc+'&startx='+fromGeo.lon+'&starty='+fromGeo.lat;
+    return u;
+  }
+  if(fromGeo){
+    return 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
+      + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+  }
+  return 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
+}
+// 설정 패널 토글 + 이미 그려진 길찾기 버튼들을 현재 선택에 맞게 갱신
+function syncNavAppUI(){
+  document.querySelectorAll('#navAppToggle [data-nav-app]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.navApp === navApp);
+  });
+  document.querySelectorAll('[data-nav-btn]').forEach(b=>{
+    b.dataset.app = navApp;
+    b.title = navAppName() + '으로 길찾기';
+  });
+}
 
 async function geocodeAddressKR(addr){
   const q = encodeURIComponent(addr + ', 대한민국');
@@ -1954,31 +2024,30 @@ async function openInNavApp(address, btnEl){
   }
   // '(' 앞부분만 내비 앱으로 전달 (예: "의림대로 41(영천동)" → "의림대로 41")
   const addr = raw.split('(')[0].trim() || raw;
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
+  const storeUrl = navStoreUrl();
   const enc = encodeURIComponent(addr);
   if(btnEl) btnEl.classList.add('loading');
   try{
     const geo = await geocodeAddressKR(addr);
     if(geo){
-      const navUrl = 'nmap://navigation?dlat='+geo.lat+'&dlng='+geo.lon+'&dname='+enc+'&appname='+NAVER_APPNAME;
+      const navUrl = navApp === 'tmap'
+        ? navRouteUrl(null, '', geo, enc)
+        : 'nmap://navigation?dlat='+geo.lat+'&dlng='+geo.lon+'&dname='+enc+'&appname='+NAVER_APPNAME;
       launchAppUrl(navUrl, storeUrl);
     } else {
-      showToast('정확한 좌표를 못 찾아 네이버맵 검색으로 엽니다');
-      const searchUrl = 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME;
-      launchAppUrl(searchUrl, storeUrl);
+      showToast('정확한 좌표를 못 찾아 '+navAppName()+' 검색으로 엽니다');
+      launchAppUrl(navSearchUrl(enc), storeUrl);
     }
   }catch(err){
-    showToast('주소 조회 실패 — 네이버맵 검색으로 엽니다');
-    const searchUrl = 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME;
-    launchAppUrl(searchUrl, storeUrl);
+    showToast('주소 조회 실패 — '+navAppName()+' 검색으로 엽니다');
+    launchAppUrl(navSearchUrl(enc), storeUrl);
   }finally{
     if(btnEl) btnEl.classList.remove('loading');
   }
 }
 
 // ---------------- 구간 경로 (N번 방문지 → N+1번 방문지) ----------------
-// 네이버맵: 출발지·도착지 좌표를 모두 지정한 정식 경로(nmap://route/car)를 엽니다.
+// 선택한 앱(네이버맵 nmap://route/car, T맵 tmap://route)으로 출발지·도착지 좌표를 모두 지정한 정식 경로를 엽니다.
 async function openSegmentRoute(fromIdx, toIdx, btnEl){
   const fromRaw = (currentVisits[fromIdx].addr || '').trim();
   const toRaw = (currentVisits[toIdx].addr || '').trim();
@@ -1988,31 +2057,21 @@ async function openSegmentRoute(fromIdx, toIdx, btnEl){
   }
   const fromAddr = fromRaw.split('(')[0].trim() || fromRaw;
   const toAddr = toRaw.split('(')[0].trim() || toRaw;
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const storeUrl = isIOS ? NAVER_STORE_IOS : NAVER_STORE_AOS;
+  const storeUrl = navStoreUrl();
 
   if(btnEl) btnEl.classList.add('loading');
   try{
     const [fromGeo, toGeo] = await Promise.all([geocodeAddressKR(fromAddr), geocodeAddressKR(toAddr)]);
 
     if(!toGeo){
-      showToast((toIdx+1)+'번 방문지 좌표를 못 찾아 네이버맵 검색으로 엽니다');
-      const enc = encodeURIComponent(toAddr);
-      const searchUrl = 'nmap://search?query='+enc+'&appname='+NAVER_APPNAME;
-      launchAppUrl(searchUrl, storeUrl);
+      showToast((toIdx+1)+'번 방문지 좌표를 못 찾아 '+navAppName()+' 검색으로 엽니다');
+      launchAppUrl(navSearchUrl(encodeURIComponent(toAddr)), storeUrl);
       return;
     }
 
     const dEnc = encodeURIComponent(toAddr);
-    let navUrl;
-    if(fromGeo){
-      const sEnc = encodeURIComponent(fromAddr);
-      navUrl = 'nmap://route/car?slat='+fromGeo.lat+'&slng='+fromGeo.lon+'&sname='+sEnc
-        + '&dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-    }else{
-      navUrl = 'nmap://route/car?dlat='+toGeo.lat+'&dlng='+toGeo.lon+'&dname='+dEnc+'&appname='+NAVER_APPNAME;
-      showToast((fromIdx+1)+'번 출발지 좌표를 못 찾아 도착지만 안내합니다');
-    }
+    const navUrl = navRouteUrl(fromGeo, encodeURIComponent(fromAddr), toGeo, dEnc);
+    if(!fromGeo) showToast((fromIdx+1)+'번 출발지 좌표를 못 찾아 도착지만 안내합니다');
     launchAppUrl(navUrl, storeUrl);
   }catch(err){
     showToast('주소 조회 중 오류가 발생했어요');
@@ -2081,6 +2140,15 @@ async function runAutoBackup(){
     if(lb) lb.textContent = '임시저장 ' + nowHHMMSS().slice(0,5);
   }catch(e){ /* 자동저장(storage)은 계속 유지되므로 조용히 무시 */ }
 }
+
+$('navAppToggle').addEventListener('click', (e)=>{
+  const b = e.target.closest('[data-nav-app]');
+  if(!b || b.dataset.navApp === navApp) return;
+  navApp = b.dataset.navApp === 'tmap' ? 'tmap' : 'naver';
+  syncNavAppUI();
+  saveSettings();
+  showToast('길찾기 앱: ' + navAppName());
+});
 
 $('autoBackupToggle').addEventListener('change', (e)=>{
   autoBackupEnabled = e.target.checked;
