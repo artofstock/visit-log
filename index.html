@@ -1618,7 +1618,7 @@ function openVisitsMenu(){
       desc:'각 카드의 순서 칸에 방문 순서를 적어두면 그 순서대로 카드를 재배열해요.',
       run: sortByOrder },
     { title:'⚙ 설정',
-      desc:'자동 임시저장 등 세부 설정을 열어요.' + (statusText ? ' (' + statusText + ')' : ''),
+      desc:'길찾기 앱(현재: ' + navAppName() + ')·자동 임시저장 등 세부 설정을 열어요.' + (statusText ? ' (' + statusText + ')' : ''),
       run: ()=>toggleSettingsPanel(true) },
   ]);
 }
