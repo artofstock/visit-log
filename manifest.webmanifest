@@ -1,18 +1,17 @@
 {
   "name": "방문일지",
   "short_name": "방문일지",
-  "description": "현장 방문 기록을 날짜별로 작성·검색하는 앱",
+  "description": "체납자 방문 명단 검색·메모 (기기 안에서만 저장)",
   "lang": "ko",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#eef1f7",
-  "theme_color": "#232c4f",
+  "background_color": "#232C4F",
+  "theme_color": "#232C4F",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }

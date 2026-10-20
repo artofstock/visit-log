@@ -1,33 +1,21 @@
-/* 방문일지 PWA 서비스워커 — 오프라인에서도 앱이 열리도록 캐시 */
-const CACHE = 'visit-log-v40';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-192.png',
-  './icons/icon-maskable-512.png'
-];
+// 방문일지 서비스워커 — 앱 파일만 캐시합니다 (명단 데이터는 건드리지 않음)
+// 새 버전을 올릴 때는 아래 숫자를 올리세요.
+const VER = 'visitlog-v1';
+const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'];
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(VER).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
-
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VER).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-
-// 캐시 우선, 없으면 네트워크 (구글 폰트 등 외부 리소스는 네트워크 실패 시 무시)
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request).catch(() => hit))
-  );
+self.addEventListener('fetch', e => {
+  const req = e.request;
+  if(req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  if(req.mode === 'navigate'){      // 화면은 인터넷이 되면 최신본, 안 되면 저장본
+    e.respondWith(fetch(req).then(r => { const cp = r.clone(); caches.open(VER).then(c => c.put('./index.html', cp)); return r; })
+      .catch(() => caches.match('./index.html')));
+    return;
+  }
+  e.respondWith(caches.match(req).then(m => m || fetch(req)));
 });
